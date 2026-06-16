@@ -5,14 +5,43 @@ import { properties } from "../../db/schema/properties";
 import { users } from "../../db/schema/users";
 import { currentUser } from "@clerk/nextjs/server";
 import { revalidatePath } from "next/cache";
-import { desc, eq, and } from "drizzle-orm";
+import { desc, eq, and, ilike, lte, or } from "drizzle-orm";
 
-// --- 1. READ ACTION (For the Homepage) ---
-export async function getAvailableProperties() {
+// --- 1. READ ACTION (For the Homepage with Search) ---
+export async function getAvailableProperties(filters?: { query?: string; maxPrice?: number }) {
   try {
+    let conditions = undefined;
+
+    // If the user passed search filters, build the SQL conditions
+    if (filters) {
+      const { query, maxPrice } = filters;
+      const queryConditions = [];
+
+      if (query) {
+        // Search for the query in either the Title OR the Location
+        queryConditions.push(
+          or(
+            ilike(properties.title, `%${query}%`),
+            ilike(properties.location, `%${query}%`)
+          )
+        );
+      }
+
+      if (maxPrice) {
+        // Find properties where the price is Less Than or Equal (lte) to the maxPrice
+        queryConditions.push(lte(properties.pricePerMonth, maxPrice));
+      }
+
+      // Combine all conditions safely
+      if (queryConditions.length > 0) {
+        conditions = and(...queryConditions);
+      }
+    }
+
     const data = await db
       .select()
       .from(properties)
+      .where(conditions) // If conditions is undefined, it just returns everything!
       .orderBy(desc(properties.createdAt));
     
     return data;
@@ -154,14 +183,24 @@ export async function updateProperty(
   const location = formData.get("location") as string;
   const price = parseInt(formData.get("pricePerMonth") as string);
   const description = formData.get("description") as string;
+  const imageUrl = formData.get("imageUrl") as string; // Capture the image if a new one was uploaded
+
+  // Build the update object dynamically
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const updateData: any = {
+    title,
+    location,
+    pricePerMonth: price,
+    description,
+  };
+
+  // Only update the image column if a new image URL was successfully passed
+  if (imageUrl) {
+    updateData.imageUrl = imageUrl;
+  }
 
   await db.update(properties)
-    .set({
-      title,
-      location,
-      pricePerMonth: price,
-      description,
-    })
+    .set(updateData)
     .where(
       and(
         eq(properties.id, propertyId),
@@ -171,4 +210,19 @@ export async function updateProperty(
 
   revalidatePath("/mgmt/dashboard");
   revalidatePath("/");
+}
+
+// --- 6. READ SINGLE ACTION (For the Edit Page) ---
+export async function getPropertyById(propertyId: string) {
+  try {
+    const data = await db
+      .select()
+      .from(properties)
+      .where(eq(properties.id, propertyId));
+    
+    return data[0] || null;
+  } catch (error) {
+    console.error("Failed to fetch single property:", error);
+    return null;
+  }
 }

@@ -1,45 +1,35 @@
 import React from "react";
-// Using explicit relative paths to bypass the alias error
-import { db } from "../../../../../../db";
-import { properties } from "../../../../../../db/schema/properties";
-import { eq } from "drizzle-orm";
-import EditPropertyForm from "../../../../../../components/EditPropertyForm";
+import { getPropertyById } from "../../../../../../lib/actions/properties"; // Double check this relative path!
+import EditPropertyForm from "../../../../../../components/EditPropertyForm"; // Double check this relative path!
+import { notFound } from "next/navigation";
 
-export default async function EditPropertyPage({ params }: { params: { id: string } }) {
-  // Fetch existing property directly from Neon securely
-  const property = await db.query.properties.findFirst({
-    where: eq(properties.id, params.id),
-  });
+interface EditPageProps {
+  params: {
+    id: string;
+  };
+}
 
-  // Fallback if someone types in a bad URL ID
+export default async function EditPropertyPage({ params }: EditPageProps) {
+  // 1. Fetch the data securely on the server
+  const property = await getPropertyById(params.id);
+
+  // 2. If someone types a random ID in the URL, show a 404
   if (!property) {
-    return (
-      <div className="max-w-2xl mx-auto p-6 mt-10 text-center">
-        <h2 className="text-xl font-bold text-slate-800">Property not found</h2>
-        <p className="text-slate-500 mt-2">The listing you are trying to edit does not exist.</p>
-      </div>
-    );
+    notFound();
   }
 
-  // We extract only the plain text/number data needed for the form to prevent Next.js hydration errors
-  const initialData = {
-    title: property.title,
-    location: property.location,
-    pricePerMonth: property.pricePerMonth,
-    description: property.description,
-  };
-
+  // 3. Pass the valid data to the interactive client form
   return (
     <div className="max-w-2xl mx-auto p-6 bg-white rounded-xl shadow-sm border border-slate-100 mt-10">
-      
-      <div className="mb-6 border-b border-slate-100 pb-4">
+      <div className="mb-8 border-b border-slate-100 pb-6">
         <h1 className="text-2xl font-bold text-slate-800">Edit Property</h1>
-        <p className="text-sm text-slate-500 mt-1">Update the details for your listing below.</p>
+        <p className="text-slate-500 text-sm mt-2">
+          Update the details for your listing.
+        </p>
       </div>
 
-      {/* Render our new interactive Client Component and pass it the data */}
-      <EditPropertyForm propertyId={property.id} initialData={initialData} />
-
+      {/* Render the client component, passing down the fetched data */}
+      <EditPropertyForm property={property} />
     </div>
   );
 }

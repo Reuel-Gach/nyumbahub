@@ -4,6 +4,7 @@ import { db } from "@/db";
 import { properties } from "@/db/schema/properties";
 import { users } from "@/db/schema/users";
 import { eq } from "drizzle-orm";
+import TourBookingForm from "@/components/TourBookingForm"; // <-- NEW: Import the booking widget
 
 export default async function PropertyDetailsPage({ params }: { params: { id: string } }) {
   // Fetch Property AND Landlord details in a single optimized query
@@ -16,6 +17,8 @@ export default async function PropertyDetailsPage({ params }: { params: { id: st
       location: properties.location,
       isAvailable: properties.isAvailable,
       createdAt: properties.createdAt,
+      imageUrl: properties.imageUrl,     // <-- NEW: Fetch the image
+      landlordId: properties.landlordId, // <-- NEW: Fetch the landlord ID for the form
       landlordName: users.fullName,
       landlordEmail: users.email,
     })
@@ -54,8 +57,14 @@ export default async function PropertyDetailsPage({ params }: { params: { id: st
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           
           <div className="lg:col-span-2 space-y-6">
-            <div className="w-full h-72 md:h-96 bg-slate-200 rounded-2xl border border-slate-300 flex items-center justify-center overflow-hidden">
-              <svg className="w-16 h-16 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+            
+            {/* NEW: Dynamic Image Rendering */}
+            <div className="w-full h-72 md:h-96 bg-slate-200 rounded-2xl border border-slate-300 flex items-center justify-center overflow-hidden relative">
+              {property.imageUrl ? (
+                <img src={property.imageUrl} alt={property.title} className="w-full h-full object-cover" />
+              ) : (
+                <svg className="w-16 h-16 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+              )}
             </div>
 
             <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
@@ -64,7 +73,7 @@ export default async function PropertyDetailsPage({ params }: { params: { id: st
                 {property.isAvailable ? (
                   <span className="bg-emerald-100 text-emerald-800 text-sm font-bold px-3 py-1 rounded-full whitespace-nowrap">Available Now</span>
                 ) : (
-                  <span className="bg-slate-100 text-slate-600 text-sm font-bold px-3 py-1 rounded-full whitespace-nowrap">Off-Market</span>
+                  <span className="bg-amber-100 text-amber-800 text-sm font-bold px-3 py-1 rounded-full whitespace-nowrap">Off-Market</span>
                 )}
               </div>
               
@@ -82,7 +91,9 @@ export default async function PropertyDetailsPage({ params }: { params: { id: st
             </div>
           </div>
 
-          <div className="lg:col-span-1">
+          <div className="lg:col-span-1 space-y-6">
+            
+            {/* Pricing & Landlord Card */}
             <div className="bg-white p-6 rounded-2xl shadow-lg border border-slate-200 sticky top-24">
               <p className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-1">Monthly Rent</p>
               <div className="flex items-end text-blue-600 mb-6">
@@ -92,7 +103,7 @@ export default async function PropertyDetailsPage({ params }: { params: { id: st
               <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 mb-6">
                 <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Listed By</p>
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center font-bold text-lg">
+                  <div className="w-10 h-10 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center font-bold text-lg uppercase">
                     {property.landlordName ? property.landlordName.charAt(0) : "?"}
                   </div>
                   <div>
@@ -104,26 +115,20 @@ export default async function PropertyDetailsPage({ params }: { params: { id: st
                   </div>
                 </div>
               </div>
-
-              {/* FIXED: Conditionally render the button as a link OR a disabled div to avoid onClick */}
+              
+              {/* NEW: Only show the booking form if the property is actually available! */}
               {property.isAvailable ? (
-                <a 
-                  href={`mailto:${property.landlordEmail}?subject=Inquiry about: ${property.title}`}
-                  className="w-full flex items-center justify-center gap-2 font-bold py-3 px-4 rounded-xl transition-all shadow-sm bg-blue-600 hover:bg-blue-700 text-white"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>
-                  Email Landlord
-                </a>
+                <TourBookingForm propertyId={property.id} landlordId={property.landlordId} />
               ) : (
-                <div className="w-full flex items-center justify-center gap-2 font-bold py-3 px-4 rounded-xl shadow-sm bg-slate-200 text-slate-500 cursor-not-allowed">
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>
+                <div className="w-full flex flex-col items-center justify-center gap-2 font-bold py-6 px-4 rounded-xl shadow-sm bg-slate-50 border border-slate-200 text-slate-500 text-center">
+                  <svg className="w-8 h-8 text-amber-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
                   Currently Unavailable
+                  <span className="text-xs font-normal mt-1">This property is currently off-market and not accepting tours.</span>
                 </div>
               )}
-              
             </div>
+            
           </div>
-
         </div>
       </div>
     </div>

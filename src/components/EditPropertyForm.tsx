@@ -1,128 +1,123 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
+import { useRouter } from "next/navigation";
 import { updateProperty } from "../lib/actions/properties";
+import { UploadDropzone } from "../utils/uploadthing";
 
-// We define the shape of the data we expect from the database
-interface EditFormProps {
-  propertyId: string;
-  initialData: {
+// Define the shape of the incoming property data
+interface EditPropertyFormProps {
+  property: {
+    id: string;
     title: string;
     location: string;
     pricePerMonth: number;
     description: string | null;
+    imageUrl: string | null;
   };
 }
 
-export default function EditPropertyForm({ propertyId, initialData }: EditFormProps) {
+export default function EditPropertyForm({ property }: EditPropertyFormProps) {
+  const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [showSuccess, setShowSuccess] = useState(false);
+  
+  // Pre-fill the image ref with the existing database image
+  const imageUrlRef = useRef<string>(property.imageUrl || "");
+  const [, setTriggerRender] = useState(0);
 
-  // We bind the ID to the server action so it knows which row to update
-  const updateWithId = updateProperty.bind(null, propertyId);
-
-  async function handleSubmit(formData: FormData) {
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault(); 
     setIsSubmitting(true);
-    setShowSuccess(false);
 
     try {
-      // Execute the server action
-      await updateWithId(formData);
+      const formData = new FormData(e.currentTarget);
+      formData.set("imageUrl", imageUrlRef.current);
       
-      // Trigger success state
-      setShowSuccess(true);
+      await updateProperty(property.id, formData);
       
-      // Hide the success banner after 4 seconds
-      setTimeout(() => setShowSuccess(false), 4000);
+      // On success, redirect back to the dashboard immediately
+      router.push("/mgmt/dashboard");
+      router.refresh(); 
     } catch (error) {
-      console.error(error);
-      alert("Failed to update property. Please try again.");
-    } finally {
-      setIsSubmitting(false);
+      console.error("Update error:", error);
+      alert("Failed to update property.");
+      setIsSubmitting(false); // Only stop loading if it fails, otherwise let it transition
     }
   }
 
   return (
-    <div>
-      {/* Success Banner */}
-      {showSuccess && (
-        <div className="mb-6 p-4 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-lg flex items-center gap-3 animate-in fade-in slide-in-from-top-4 shadow-sm">
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path></svg>
-          <span className="font-medium">Changes saved successfully!</span>
-        </div>
-      )}
-
-      {/* The Form */}
-      <form action={handleSubmit} className="space-y-6">
+    <form onSubmit={handleSubmit} className="space-y-6">
+      
+      {/* IMAGE UPLOAD SECTION */}
+      <div className="p-6 bg-slate-50 rounded-xl border border-slate-200">
+        <label className="block text-sm font-bold text-slate-700 mb-4">Property Photo</label>
         
-        {/* Title Field */}
-        <div className="space-y-2">
-          <label className="block text-sm font-medium text-slate-700">Property Title</label>
-          <input 
-            name="title" 
-            defaultValue={initialData.title} 
-            className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all" 
-            required 
-          />
-        </div>
-
-        {/* Location & Price Row */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="space-y-2">
-            <label className="block text-sm font-medium text-slate-700">Location</label>
-            <input 
-              name="location" 
-              defaultValue={initialData.location} 
-              className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all" 
-              required 
-            />
+        {imageUrlRef.current ? (
+          <div className="relative w-full h-64 rounded-xl overflow-hidden border border-emerald-200">
+            <img src={imageUrlRef.current} alt="preview" className="w-full h-full object-cover" />
+            <button 
+              type="button" 
+              onClick={() => { imageUrlRef.current = ""; setTriggerRender(p => p + 1); }}
+              className="absolute top-3 right-3 bg-red-500 text-white text-xs font-bold px-3 py-1.5 rounded-full"
+            >
+              Remove & Change
+            </button>
           </div>
-          <div className="space-y-2">
-            <label className="block text-sm font-medium text-slate-700">Monthly Rent (Ksh)</label>
-            <input 
-              name="pricePerMonth" 
-              type="number" 
-              defaultValue={initialData.pricePerMonth} 
-              className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all" 
-              required 
-            />
-          </div>
-        </div>
-
-        {/* Description Field */}
-        <div className="space-y-2">
-          <label className="block text-sm font-medium text-slate-700">Description</label>
-          <textarea 
-            name="description" 
-            defaultValue={initialData.description || ""} 
-            rows={4} 
-            className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all resize-y" 
+        ) : (
+          <UploadDropzone
+            endpoint="propertyImage"
+            onClientUploadComplete={(res) => {
+              if (res && res[0]) {
+                imageUrlRef.current = res[0].url;
+                setTriggerRender(p => p + 1); 
+              }
+            }}
+            onUploadError={(e) => alert(`Upload failed: ${e.message}`)}
+            className="ut-button:bg-blue-600 p-8 border-2 border-dashed border-slate-300 bg-white"
           />
-        </div>
+        )}
+      </div>
 
-        {/* Submit Button */}
-        <div className="pt-4">
-          <button 
-            type="submit" 
-            disabled={isSubmitting}
-            className={`w-full text-white font-semibold py-3 px-4 rounded-lg transition-colors shadow-sm flex justify-center items-center gap-2
-              ${isSubmitting ? 'bg-blue-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'}`}
-          >
-            {isSubmitting ? (
-              <>
-                <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-                Saving Changes...
-              </>
-            ) : (
-              "Save Changes"
-            )}
-          </button>
-        </div>
+      <input type="hidden" name="imageUrl" value={imageUrlRef.current} />
 
-      </form>
-    </div>
+      <div className="space-y-2">
+        <label className="block text-sm font-medium text-slate-700">Property Title *</label>
+        {/* Notice we use defaultValue to pre-fill the inputs! */}
+        <input type="text" name="title" defaultValue={property.title} required className="w-full px-4 py-2 border border-slate-300 rounded-lg" />
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="space-y-2">
+          <label className="block text-sm font-medium text-slate-700">Location *</label>
+          <input type="text" name="location" defaultValue={property.location} required className="w-full px-4 py-2 border border-slate-300 rounded-lg" />
+        </div>
+        <div className="space-y-2">
+          <label className="block text-sm font-medium text-slate-700">Monthly Rent (Ksh) *</label>
+          <input type="number" name="pricePerMonth" defaultValue={property.pricePerMonth} required className="w-full px-4 py-2 border border-slate-300 rounded-lg" />
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        <label className="block text-sm font-medium text-slate-700">Description</label>
+        <textarea name="description" defaultValue={property.description || ""} rows={4} className="w-full px-4 py-2 border border-slate-300 rounded-lg"></textarea>
+      </div>
+
+      <div className="pt-4 flex gap-4">
+        <button
+          type="button"
+          onClick={() => router.push("/mgmt/dashboard")}
+          className="flex-1 bg-white border border-slate-300 text-slate-700 font-semibold py-3 px-4 rounded-lg hover:bg-slate-50 transition-colors"
+        >
+          Cancel
+        </button>
+        <button
+          type="submit"
+          disabled={isSubmitting || !imageUrlRef.current}
+          className={`flex-1 text-white font-semibold py-3 px-4 rounded-lg ${isSubmitting || !imageUrlRef.current ? 'bg-slate-400' : 'bg-blue-600 hover:bg-blue-700'}`}
+        >
+          {isSubmitting ? "Saving Changes..." : "Save Changes"}
+        </button>
+      </div>
+    </form>
   );
 }
