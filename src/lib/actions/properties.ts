@@ -226,3 +226,28 @@ export async function getPropertyById(propertyId: string) {
     return null;
   }
 }
+// --- 7. TOGGLE STATUS ACTION (For the Availability Toggle) ---
+export async function updatePropertyStatus(propertyId: string, isAvailable: boolean) {
+  const clerkUser = await currentUser();
+  if (!clerkUser) throw new Error("Unauthorized");
+
+  const existingUsers = await db
+    .select()
+    .from(users)
+    .where(eq(users.clerkId, clerkUser.id));
+    
+  const landlordId = existingUsers[0]?.id;
+  if (!landlordId) throw new Error("User not found");
+
+  await db.update(properties)
+    .set({ isAvailable: isAvailable })
+    .where(
+      and(
+        eq(properties.id, propertyId),
+        eq(properties.landlordId, landlordId)
+      )
+    );
+
+  revalidatePath("/mgmt/dashboard");
+  revalidatePath("/");
+}
