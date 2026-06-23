@@ -10,7 +10,9 @@ import { desc, eq, and, ilike, lte, or } from "drizzle-orm";
 // --- 1. READ ACTION (For the Homepage with Search) ---
 export async function getAvailableProperties(filters?: { query?: string; maxPrice?: number }) {
   try {
-    let conditions = undefined;
+    // FIX: Base condition - The property MUST be an active listing
+    const baseCondition = eq(properties.status, 'active_listing');
+    let finalConditions = baseCondition;
 
     // If the user passed search filters, build the SQL conditions
     if (filters) {
@@ -32,16 +34,16 @@ export async function getAvailableProperties(filters?: { query?: string; maxPric
         queryConditions.push(lte(properties.pricePerMonth, maxPrice));
       }
 
-      // Combine all conditions safely
+      // Combine base condition safely with the search filters
       if (queryConditions.length > 0) {
-        conditions = and(...queryConditions);
+        finalConditions = and(baseCondition, ...queryConditions);
       }
     }
 
     const data = await db
       .select()
       .from(properties)
-      .where(conditions) // If conditions is undefined, it just returns everything!
+      .where(finalConditions) // Now it ALWAYS filters out occupied/vacant units!
       .orderBy(desc(properties.createdAt));
     
     return data;
@@ -59,7 +61,6 @@ export async function createProperty(formData: FormData) {
     throw new Error("Unauthorized: You must be logged in to post a property.");
   }
 
-  // Step 1: Check if this Clerk user already exists in our Neon database
   const existingUsers = await db
     .select()
     .from(users)
@@ -67,7 +68,6 @@ export async function createProperty(formData: FormData) {
     
   let databaseUser = existingUsers[0];
 
-  // Step 2: If they don't exist in Neon yet, sync them over!
   if (!databaseUser) {
     const primaryEmail = clerkUser.emailAddresses[0]?.emailAddress || "no-email@provided.com";
     const fullName = `${clerkUser.firstName || ''} ${clerkUser.lastName || ''}`.trim();
@@ -86,14 +86,12 @@ export async function createProperty(formData: FormData) {
     databaseUser = insertedUsers[0]; 
   }
 
-  // Step 3: Extract data from the form
   const title = formData.get("title") as string;
   const location = formData.get("location") as string;
   const price = parseInt(formData.get("pricePerMonth") as string);
   const description = formData.get("description") as string;
   const imageUrl = formData.get("imageUrl") as string;
 
-  // Step 4: Insert the property using the guaranteed Neon database UUID
   await db.insert(properties).values({
     landlordId: databaseUser.id, 
     title,
@@ -103,10 +101,9 @@ export async function createProperty(formData: FormData) {
     imageUrl, 
   });
 
-  // Step 5: Bust the cache for the new form, dashboard, and the root homepage!
   revalidatePath("/mgmt/properties/new");
   revalidatePath("/mgmt/dashboard");
-  revalidatePath("/"); // Force re-render for localhost:3000 immediately
+  revalidatePath("/"); 
 }
 
 // --- 3. READ ACTION (For the Landlord Dashboard) ---
@@ -158,7 +155,6 @@ export async function deleteProperty(propertyId: string) {
       )
     );
 
-  // Refresh both layouts securely
   revalidatePath("/mgmt/dashboard");
   revalidatePath("/");
 }
@@ -183,9 +179,8 @@ export async function updateProperty(
   const location = formData.get("location") as string;
   const price = parseInt(formData.get("pricePerMonth") as string);
   const description = formData.get("description") as string;
-  const imageUrl = formData.get("imageUrl") as string; // Capture the image if a new one was uploaded
+  const imageUrl = formData.get("imageUrl") as string; 
 
-  // Build the update object dynamically
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const updateData: any = {
     title,
@@ -194,7 +189,6 @@ export async function updateProperty(
     description,
   };
 
-  // Only update the image column if a new image URL was successfully passed
   if (imageUrl) {
     updateData.imageUrl = imageUrl;
   }
@@ -226,8 +220,12 @@ export async function getPropertyById(propertyId: string) {
     return null;
   }
 }
+
 // --- 7. TOGGLE STATUS ACTION (For the Availability Toggle) ---
-export async function updatePropertyStatus(propertyId: string, isAvailable: boolean) {
+export async function updatePropertyStatus(
+  propertyId: string, 
+  newStatus: "active_listing" | "vacant" | "occupied" // FIX: Upgraded from boolean to SaaS lifecycle status
+) {
   const clerkUser = await currentUser();
   if (!clerkUser) throw new Error("Unauthorized");
 
@@ -240,7 +238,7 @@ export async function updatePropertyStatus(propertyId: string, isAvailable: bool
   if (!landlordId) throw new Error("User not found");
 
   await db.update(properties)
-    .set({ isAvailable: isAvailable })
+    .set({ status: newStatus }) // FIX: Updating the new column
     .where(
       and(
         eq(properties.id, propertyId),

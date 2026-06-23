@@ -62,11 +62,11 @@ export default async function RootPage({
                       <h2 className="text-lg font-bold text-slate-800 line-clamp-1">
                         {property.title}
                       </h2>
-                      {property.isAvailable && (
-                        <span className="bg-emerald-50 text-emerald-700 text-xs font-semibold px-2.5 py-1 rounded-full whitespace-nowrap">
-                          Active
-                        </span>
-                      )}
+                      {property.status === 'active_listing' && (
+  <span className="bg-emerald-50 text-emerald-700 text-xs font-semibold px-2.5 py-1 rounded-full whitespace-nowrap">
+    Active Listing
+  </span>
+)}
                     </div>
                     
                     <p className="text-slate-400 text-xs font-medium mb-3 flex items-center gap-1">
