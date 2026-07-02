@@ -2,8 +2,8 @@
 
 import { db } from "../../db";
 import { tourRequests } from "../../db/schema/tours";
-import { properties } from "../../db/schema/properties"; // Ensure this import exists
-import { users } from "../../db/schema/users";           // Ensure this import exists
+import { properties } from "../../db/schema/properties";
+import { users } from "../../db/schema/users";
 import { revalidatePath } from "next/cache";
 import { eq, desc } from "drizzle-orm";
 import { currentUser } from "@clerk/nextjs/server";
@@ -37,6 +37,7 @@ export async function submitTourRequest(formData: FormData) {
     });
 
     revalidatePath("/mgmt/dashboard");
+    revalidatePath("/");
     
     return { success: true };
   } catch (error) {
@@ -62,6 +63,7 @@ export async function getLandlordTours() {
     const data = await db
       .select({
         id: tourRequests.id,
+        propertyId: tourRequests.propertyId, // FIXED: Now we are actually fetching the ID!
         tenantName: tourRequests.tenantName,
         tenantEmail: tourRequests.tenantEmail,
         tenantPhone: tourRequests.tenantPhone,
@@ -69,6 +71,7 @@ export async function getLandlordTours() {
         message: tourRequests.message,
         status: tourRequests.status,
         propertyTitle: properties.title,
+        pricePerMonth: properties.pricePerMonth, // FIXED: Fetching the default rent for the Move In form!
       })
       .from(tourRequests)
       .leftJoin(properties, eq(tourRequests.propertyId, properties.id))
@@ -90,6 +93,7 @@ export async function updateTourStatus(tourId: string, newStatus: "approved" | "
       .where(eq(tourRequests.id, tourId));
 
     revalidatePath("/mgmt/dashboard");
+    revalidatePath("/mgmt/tours"); // FIXED: Ensures the tours page updates instantly
   } catch (error) {
     console.error("Failed to update tour status:", error);
     throw new Error("Failed to update status");

@@ -8,15 +8,24 @@ interface MoveInProps {
   propertyId: string;
   tenantName: string;
   tenantEmail: string;
-  defaultRent: number; // We pull this from the property to make it easy for the landlord
+  defaultRent: number;
 }
 
 export default function MoveInForm({ tourId, propertyId, tenantName, tenantEmail, defaultRent }: MoveInProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
+  // SAFETY CHECK: Catch missing data before it hits the database
+  const isMissingId = !propertyId || propertyId === "undefined";
+
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+
+    if (isMissingId) {
+      alert("CRITICAL ERROR: Property ID is missing from the database query. Cannot create lease.");
+      return;
+    }
+
     setIsLoading(true);
 
     try {
@@ -49,11 +58,19 @@ export default function MoveInForm({ tourId, propertyId, tenantName, tenantEmail
         <button onClick={() => setIsOpen(false)} className="text-emerald-500 hover:text-emerald-700 font-bold text-lg">&times;</button>
       </div>
 
+      {/* NEW: Visual Developer Warning so you can see if the ID is missing! */}
+      {isMissingId && (
+        <div className="mb-3 p-2 bg-red-100 text-red-700 text-xs font-bold rounded border border-red-200">
+          🚨 Developer Warning: propertyId is missing! Update getLandlordTours() in actions/tours.ts to select it.
+        </div>
+      )}
+
       <form onSubmit={handleSubmit} className="space-y-3">
-        <input type="hidden" name="tourId" value={tourId} />
-        <input type="hidden" name="propertyId" value={propertyId} />
-        <input type="hidden" name="tenantName" value={tenantName} />
-        <input type="hidden" name="tenantEmail" value={tenantEmail} />
+        {/* The hidden inputs are now protected with fallbacks */}
+        <input type="hidden" name="tourId" value={tourId || ""} />
+        <input type="hidden" name="propertyId" value={propertyId || ""} />
+        <input type="hidden" name="tenantName" value={tenantName || ""} />
+        <input type="hidden" name="tenantEmail" value={tenantEmail || ""} />
 
         <div>
           <label className="block text-xs font-semibold text-emerald-800 uppercase mb-1">Agreed Monthly Rent (Ksh)</label>
@@ -79,8 +96,10 @@ export default function MoveInForm({ tourId, propertyId, tenantName, tenantEmail
 
         <button 
           type="submit" 
-          disabled={isLoading}
-          className="w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold rounded-lg transition-colors shadow-sm"
+          disabled={isLoading || isMissingId}
+          className={`w-full py-2 text-white text-sm font-bold rounded-lg transition-colors shadow-sm ${
+            isMissingId ? "bg-slate-400 cursor-not-allowed" : "bg-emerald-600 hover:bg-emerald-700"
+          }`}
         >
           {isLoading ? "Processing..." : "Finalize Lease & Mark Occupied"}
         </button>

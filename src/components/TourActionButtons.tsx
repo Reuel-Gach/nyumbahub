@@ -2,9 +2,18 @@
 
 import React, { useState } from "react";
 import { updateTourStatus } from "@/lib/actions/tours";
-import MoveInForm from "./MoveInForm"; // NEW IMPORT
+import MoveInForm from "./MoveInForm";
 
-// Notice we added propertyId, tenantName, etc. to the props so we can pass them down!
+// Strictly typing our props so Next.js guarantees we don't forget the Property ID again!
+interface TourActionProps {
+  tourId: string;
+  currentStatus: string;
+  propertyId: string;
+  tenantName: string;
+  tenantEmail: string;
+  rentAmount?: number;
+}
+
 export default function TourActionButtons({ 
   tourId, 
   currentStatus, 
@@ -12,7 +21,7 @@ export default function TourActionButtons({
   tenantName, 
   tenantEmail, 
   rentAmount 
-}: any) {
+}: TourActionProps) {
   const [isLoading, setIsLoading] = useState(false);
 
   async function handleStatusChange(status: "approved" | "declined" | "completed") {
@@ -36,7 +45,7 @@ export default function TourActionButtons({
     );
   }
 
-  // --- NEW: If Approved, show the Move In Form! ---
+  // If Approved, show the Move In Form!
   if (currentStatus === "approved") {
     return (
       <div className="flex flex-col items-end">

@@ -2,7 +2,7 @@ import React from "react";
 import Link from "next/link";
 import { getLandlordProperties } from "../../../../lib/actions/properties";
 import PropertyActions from "../../../../components/PropertyActions";
-import StatusDropdown from "../../../../components/StatusDropdown"; // NEW IMPORT
+import StatusDropdown from "../../../../components/StatusDropdown";
 
 export const dynamic = 'force-dynamic';
 
@@ -10,9 +10,9 @@ export default async function DashboardPage() {
   // 1. Fetch the data
   const myProperties = await getLandlordProperties();
 
-  // 2. Calculate the Analytics Metrics (UPDATED FOR NEW SCHEMA)
+  // 2. Calculate the Analytics Metrics
   const totalUnits = myProperties.length;
-  const activeUnits = myProperties.filter(property => property.status === "active_listing").length;
+  const activeUnits = myProperties.filter(property => property.isAvailable).length;
   const offMarketUnits = totalUnits - activeUnits;
   
   // Calculate total potential monthly revenue
@@ -30,18 +30,29 @@ export default async function DashboardPage() {
           <p className="text-slate-500 mt-1">Overview of your portfolio performance and revenue.</p>
         </div>
 
-        <div className="flex items-center gap-3">
+        {/* UPDATED: Action Buttons Container (Now wraps beautifully on smaller screens) */}
+        <div className="flex flex-wrap items-center gap-3">
+          
+          {/* NEW: Financial Ledger Button */}
+          <Link
+            href="/mgmt/finances"
+            className="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 px-4 py-2.5 rounded-lg font-bold transition-colors shadow-sm whitespace-nowrap flex items-center gap-2 text-sm"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+            Finances
+          </Link>
+
           <Link
             href="/mgmt/tours"
-            className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-5 py-3 rounded-lg font-semibold transition-colors shadow-sm whitespace-nowrap flex items-center gap-2"
+            className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2.5 rounded-lg font-bold transition-colors shadow-sm whitespace-nowrap flex items-center gap-2 text-sm border border-slate-200"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
-            View Tour Requests
+            Tours
           </Link>
 
           <Link
             href="/mgmt/properties/new"
-            className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-3 rounded-lg font-semibold transition-colors shadow-sm whitespace-nowrap flex items-center gap-2"
+            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-lg font-bold transition-colors shadow-sm whitespace-nowrap flex items-center gap-2 text-sm"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4"></path></svg>
             New Listing
@@ -99,13 +110,10 @@ export default async function DashboardPage() {
                   <div>
                     <div className="flex items-center gap-3 mb-1">
                       <h3 className="text-lg font-bold text-slate-800 line-clamp-1">{property.title}</h3>
-                      
-                      {/* NEW: Replaced the static badge with our interactive Dropdown! */}
                       <StatusDropdown 
                         propertyId={property.id} 
-                        currentStatus={property.status as "active_listing" | "vacant" | "occupied"} 
+                        isAvailable={property.isAvailable} 
                       />
-                      
                     </div>
                     <p className="text-sm text-slate-500 flex items-center gap-1">
                       <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.243-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>

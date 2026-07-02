@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, uuid, integer, varchar } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, uuid, integer, boolean } from "drizzle-orm/pg-core";
 import { users } from "./users";
 
 export const properties = pgTable("properties", {
@@ -13,9 +13,8 @@ export const properties = pgTable("properties", {
   pricePerMonth: integer("price_per_month").notNull(),
   location: text("location").notNull(),
   
-  // UPGRADED: Replaced 'isAvailable' boolean with a robust SaaS lifecycle status
-  status: varchar("status", { enum: ["vacant", "active_listing", "occupied"] }).default("active_listing").notNull(),
+  // REVERTED: Using boolean for stability
+  isAvailable: boolean("is_available").default(true).notNull(),
   
   createdAt: timestamp("created_at").defaultNow().notNull(),
-  updatedAt: timestamp("updated_at").defaultNow(),
 });

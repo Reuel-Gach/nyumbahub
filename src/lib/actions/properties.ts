@@ -10,8 +10,8 @@ import { desc, eq, and, ilike, lte, or } from "drizzle-orm";
 // --- 1. READ ACTION (For the Homepage with Search) ---
 export async function getAvailableProperties(filters?: { query?: string; maxPrice?: number }) {
   try {
-    // FIX: Base condition - The property MUST be an active listing
-    const baseCondition = eq(properties.status, 'active_listing');
+    // REVERTED: Base condition - The property MUST have isAvailable set to true
+    const baseCondition = eq(properties.isAvailable, true);
     let finalConditions = baseCondition;
 
     // If the user passed search filters, build the SQL conditions
@@ -43,7 +43,7 @@ export async function getAvailableProperties(filters?: { query?: string; maxPric
     const data = await db
       .select()
       .from(properties)
-      .where(finalConditions) // Now it ALWAYS filters out occupied/vacant units!
+      .where(finalConditions) // Now it ALWAYS filters out Off-Market units!
       .orderBy(desc(properties.createdAt));
     
     return data;
@@ -224,7 +224,7 @@ export async function getPropertyById(propertyId: string) {
 // --- 7. TOGGLE STATUS ACTION (For the Availability Toggle) ---
 export async function updatePropertyStatus(
   propertyId: string, 
-  newStatus: "active_listing" | "vacant" | "occupied" // FIX: Upgraded from boolean to SaaS lifecycle status
+  isAvailable: boolean // REVERTED: Back to standard boolean toggle
 ) {
   const clerkUser = await currentUser();
   if (!clerkUser) throw new Error("Unauthorized");
@@ -238,7 +238,7 @@ export async function updatePropertyStatus(
   if (!landlordId) throw new Error("User not found");
 
   await db.update(properties)
-    .set({ status: newStatus }) // FIX: Updating the new column
+    .set({ isAvailable: isAvailable }) // REVERTED: Updating the boolean column
     .where(
       and(
         eq(properties.id, propertyId),

@@ -43,7 +43,15 @@ export default async function ToursPage() {
                 </div>
                 
                 <div className="flex-shrink-0">
-                  <TourActionButtons tourId={tour.id} currentStatus={tour.status} />
+                  {/* FULLY UPDATED: We are now passing the missing propertyId and tenant details! */}
+                  <TourActionButtons 
+                    tourId={tour.id} 
+                    currentStatus={tour.status} 
+                    propertyId={tour.propertyId}
+                    tenantName={tour.tenantName}
+                    tenantEmail={tour.tenantEmail}
+                    rentAmount={tour.pricePerMonth || 0}
+                  />
                 </div>
               </div>
             ))}
