@@ -42,19 +42,18 @@ export default function Navbar() {
             </Link>
             
             <SignedIn>
-              {/* LANDLORD ONLY LINKS */}
+              {/* BOTH ROLES GET THE DASHBOARD */}
+              <Link href="/mgmt/dashboard" className="text-slate-600 hover:text-blue-600 font-medium transition-colors">
+                My Dashboard
+              </Link>
+
+              {/* DYNAMIC POSTING BUTTON */}
               {userRole === "landlord" ? (
-                <>
-                  <Link href="/mgmt/properties/new" className="text-slate-600 hover:text-blue-600 font-medium transition-colors">
-                    Post Property
-                  </Link>
-                  <Link href="/mgmt/dashboard" className="text-slate-600 hover:text-blue-600 font-medium transition-colors">
-                    My Dashboard
-                  </Link>
-                </>
+                <Link href="/mgmt/properties/new" className="text-slate-600 hover:text-blue-600 font-medium transition-colors">
+                  Post Property
+                </Link>
               ) : (
-                /* TENANT UPGRADE LINK */
-                <Link href="/landlords" className="text-emerald-600 hover:text-emerald-700 font-medium transition-colors flex items-center gap-1">
+                <Link href="/mgmt/properties/new" className="text-emerald-600 hover:text-emerald-700 font-medium transition-colors flex items-center gap-1">
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path></svg>
                   List your Property
                 </Link>
@@ -109,26 +108,27 @@ export default function Navbar() {
           </Link>
           
           <SignedIn>
+            {/* BOTH ROLES GET THE DASHBOARD (MOBILE) */}
+            <Link 
+              href="/mgmt/dashboard" 
+              className="block px-3 py-2 rounded-md text-base font-medium text-slate-700 hover:text-blue-600 hover:bg-blue-50"
+              onClick={() => setIsMobileMenuOpen(false)}
+            >
+              My Dashboard
+            </Link>
+
+            {/* DYNAMIC POSTING BUTTON (MOBILE) */}
             {userRole === "landlord" ? (
-              <>
-                <Link 
-                  href="/mgmt/properties/new" 
-                  className="block px-3 py-2 rounded-md text-base font-medium text-slate-700 hover:text-blue-600 hover:bg-blue-50"
-                  onClick={() => setIsMobileMenuOpen(false)}
-                >
-                  Post Property
-                </Link>
-                <Link 
-                  href="/mgmt/dashboard" 
-                  className="block px-3 py-2 rounded-md text-base font-medium text-slate-700 hover:text-blue-600 hover:bg-blue-50"
-                  onClick={() => setIsMobileMenuOpen(false)}
-                >
-                  My Dashboard
-                </Link>
-              </>
+              <Link 
+                href="/mgmt/properties/new" 
+                className="block px-3 py-2 rounded-md text-base font-medium text-slate-700 hover:text-blue-600 hover:bg-blue-50"
+                onClick={() => setIsMobileMenuOpen(false)}
+              >
+                Post Property
+              </Link>
             ) : (
               <Link 
-                href="/landlords" 
+                href="/mgmt/properties/new" 
                 className="block px-3 py-2 rounded-md text-base font-medium text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
                 onClick={() => setIsMobileMenuOpen(false)}
               >
