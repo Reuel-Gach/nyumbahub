@@ -10,17 +10,14 @@ import { desc, eq, and, ilike, lte, or } from "drizzle-orm";
 // --- 1. READ ACTION (For the Homepage with Search) ---
 export async function getAvailableProperties(filters?: { query?: string; maxPrice?: number }) {
   try {
-    // REVERTED: Base condition - The property MUST have isAvailable set to true
     const baseCondition = eq(properties.isAvailable, true);
     let finalConditions = baseCondition;
 
-    // If the user passed search filters, build the SQL conditions
     if (filters) {
       const { query, maxPrice } = filters;
       const queryConditions = [];
 
       if (query) {
-        // Search for the query in either the Title OR the Location
         queryConditions.push(
           or(
             ilike(properties.title, `%${query}%`),
@@ -30,11 +27,9 @@ export async function getAvailableProperties(filters?: { query?: string; maxPric
       }
 
       if (maxPrice) {
-        // Find properties where the price is Less Than or Equal (lte) to the maxPrice
         queryConditions.push(lte(properties.pricePerMonth, maxPrice));
       }
 
-      // Combine base condition safely with the search filters
       if (queryConditions.length > 0) {
         finalConditions = and(baseCondition, ...queryConditions);
       }
@@ -43,7 +38,7 @@ export async function getAvailableProperties(filters?: { query?: string; maxPric
     const data = await db
       .select()
       .from(properties)
-      .where(finalConditions) // Now it ALWAYS filters out Off-Market units!
+      .where(finalConditions) 
       .orderBy(desc(properties.createdAt));
     
     return data;
@@ -68,6 +63,7 @@ export async function createProperty(formData: FormData) {
     
   let databaseUser = existingUsers[0];
 
+  // If they don't exist at all, create them
   if (!databaseUser) {
     const primaryEmail = clerkUser.emailAddresses[0]?.emailAddress || "no-email@provided.com";
     const fullName = `${clerkUser.firstName || ''} ${clerkUser.lastName || ''}`.trim();
@@ -84,13 +80,40 @@ export async function createProperty(formData: FormData) {
     }
 
     databaseUser = insertedUsers[0]; 
+  } else if (databaseUser.role !== "landlord") {
+    // 🔥 THE UPGRADE: If they already exist as a tenant, upgrade them to a landlord instantly!
+    await db.update(users)
+      .set({ role: "landlord" })
+      .where(eq(users.id, databaseUser.id));
+      
+    databaseUser.role = "landlord";
   }
 
   const title = formData.get("title") as string;
   const location = formData.get("location") as string;
   const price = parseInt(formData.get("pricePerMonth") as string);
   const description = formData.get("description") as string;
+  
+  // The Cover Image
   const imageUrl = formData.get("imageUrl") as string;
+
+  // 🔥 MULTI-IMAGE GALLERY LOGIC
+  let galleryUrls: string[] = [];
+  const galleryData = formData.getAll("gallery");
+  
+  if (galleryData.length > 0) {
+    // Check if the frontend sent a single stringified JSON array
+    if (galleryData.length === 1 && typeof galleryData[0] === "string" && galleryData[0].startsWith("[")) {
+      try {
+        galleryUrls = JSON.parse(galleryData[0]);
+      } catch (e) {
+        galleryUrls = [galleryData[0]];
+      }
+    } else {
+      // Or if the frontend appended multiple separate "gallery" inputs
+      galleryUrls = galleryData.map(val => val.toString());
+    }
+  }
 
   await db.insert(properties).values({
     landlordId: databaseUser.id, 
@@ -99,6 +122,7 @@ export async function createProperty(formData: FormData) {
     pricePerMonth: price,
     description,
     imageUrl, 
+    gallery: galleryUrls, // Save the array of images
   });
 
   revalidatePath("/mgmt/properties/new");
@@ -181,6 +205,22 @@ export async function updateProperty(
   const description = formData.get("description") as string;
   const imageUrl = formData.get("imageUrl") as string; 
 
+  // Process gallery for updates
+  let galleryUrls: string[] = [];
+  const galleryData = formData.getAll("gallery");
+  
+  if (galleryData.length > 0) {
+    if (galleryData.length === 1 && typeof galleryData[0] === "string" && galleryData[0].startsWith("[")) {
+      try {
+        galleryUrls = JSON.parse(galleryData[0]);
+      } catch (e) {
+        galleryUrls = [galleryData[0]];
+      }
+    } else {
+      galleryUrls = galleryData.map(val => val.toString());
+    }
+  }
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const updateData: any = {
     title,
@@ -189,9 +229,8 @@ export async function updateProperty(
     description,
   };
 
-  if (imageUrl) {
-    updateData.imageUrl = imageUrl;
-  }
+  if (imageUrl) updateData.imageUrl = imageUrl;
+  if (galleryUrls.length > 0) updateData.gallery = galleryUrls;
 
   await db.update(properties)
     .set(updateData)
@@ -224,7 +263,7 @@ export async function getPropertyById(propertyId: string) {
 // --- 7. TOGGLE STATUS ACTION (For the Availability Toggle) ---
 export async function updatePropertyStatus(
   propertyId: string, 
-  isAvailable: boolean // REVERTED: Back to standard boolean toggle
+  isAvailable: boolean 
 ) {
   const clerkUser = await currentUser();
   if (!clerkUser) throw new Error("Unauthorized");
@@ -238,7 +277,7 @@ export async function updatePropertyStatus(
   if (!landlordId) throw new Error("User not found");
 
   await db.update(properties)
-    .set({ isAvailable: isAvailable }) // REVERTED: Updating the boolean column
+    .set({ isAvailable: isAvailable }) 
     .where(
       and(
         eq(properties.id, propertyId),
