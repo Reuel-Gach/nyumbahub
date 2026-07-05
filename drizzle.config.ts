@@ -1,14 +1,14 @@
 import { defineConfig } from "drizzle-kit";
-import * as dotenv from "dotenv";
+import { config } from "dotenv";
 
-dotenv.config({ path: ".env.local" });
+// Tell Drizzle to explicitly load variables from .env.local
+config({ path: ".env.local" }); 
 
 export default defineConfig({
+  schema: "./src/db/schema/*", // Verify this path matches where your schemas are!
   out: "./drizzle",
-  schema: "./src/db/schema/*", 
   dialect: "postgresql",
   dbCredentials: {
-    // UPDATED: Now Drizzle uses the direct line!
-    url: process.env.DIRECT_URL!,
+    url: process.env.DATABASE_URL!, // This will now successfully find your Neon URL
   },
 });
