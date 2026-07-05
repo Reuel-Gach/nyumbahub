@@ -1,7 +1,14 @@
-import React from "react";
-import Link from "next/link";
+"use client";
 
+import React, { useState } from "react";
+import Link from "next/link";
+import TourChatModal from "./TourChatModal"; // Import the newly created Chat Modal
+
+// Note: Ensure we cast the incoming server data safely.
 export default function TenantDashboardView({ tenantData }: { tenantData: any }) {
+  // Chat Modal State
+  const [selectedTour, setSelectedTour] = useState<any>(null);
+
   if (!tenantData) return null;
   const { user, lease, payments, tours } = tenantData;
 
@@ -20,8 +27,9 @@ export default function TenantDashboardView({ tenantData }: { tenantData: any })
         {/* The Bridge to Landlord Mode */}
         <Link
           href="/mgmt/properties/new"
-          className="bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 px-4 py-2.5 rounded-lg font-bold transition-colors shadow-sm text-sm"
+          className="bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 px-4 py-2.5 rounded-lg font-bold transition-colors shadow-sm text-sm flex items-center gap-2"
         >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path></svg>
           Own a property? List it here
         </Link>
       </div>
@@ -120,7 +128,7 @@ export default function TenantDashboardView({ tenantData }: { tenantData: any })
       )}
 
       {/* 4. MY TOUR REQUESTS (Always show, very useful for house hunting) */}
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+      <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden mb-8">
         <div className="bg-slate-50 px-6 py-4 border-b border-slate-200">
           <h2 className="text-lg font-bold text-slate-800">📅 My Tour Requests</h2>
         </div>
@@ -130,14 +138,26 @@ export default function TenantDashboardView({ tenantData }: { tenantData: any })
             {tours.map((tour: any) => (
               <div key={tour.id} className="p-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 hover:bg-slate-50 transition-colors">
                 <div>
-                  <h3 className="font-bold text-slate-800">{tour.propertyTitle}</h3>
+                  <h3 className="font-bold text-slate-800 text-lg">{tour.propertyTitle}</h3>
                   <p className="text-sm text-slate-500 mt-1">📍 {tour.propertyLocation}</p>
-                  <p className="text-sm text-slate-600 mt-2">
-                    Scheduled for: <span className="font-semibold">{new Date(tour.tourDate).toLocaleDateString('en-GB')}</span>
-                  </p>
+                  <div className="flex items-center gap-4 mt-3">
+                    <p className="text-sm text-slate-600 bg-slate-100 px-3 py-1 rounded-md">
+                      Date: <span className="font-bold">{new Date(tour.tourDate).toLocaleDateString('en-GB')}</span>
+                    </p>
+                    
+                    {/* NEW: The Chat Button triggers the Modal */}
+                    <button 
+                      onClick={() => setSelectedTour(tour)}
+                      className="text-sm font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1 transition-colors"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path></svg>
+                      Open Chat
+                    </button>
+                  </div>
                 </div>
-                <div>
-                  <span className={`px-4 py-2 rounded-full text-xs font-bold uppercase tracking-wide
+                
+                <div className="w-full sm:w-auto text-left sm:text-right border-t sm:border-t-0 border-slate-100 pt-3 sm:pt-0">
+                  <span className={`inline-block px-4 py-2 rounded-full text-xs font-bold uppercase tracking-wide
                     ${tour.status === 'approved' ? 'bg-blue-100 text-blue-800' : 
                       tour.status === 'declined' ? 'bg-red-100 text-red-800' : 
                       tour.status === 'completed' ? 'bg-emerald-100 text-emerald-800' : 
@@ -151,13 +171,27 @@ export default function TenantDashboardView({ tenantData }: { tenantData: any })
           </div>
         ) : (
           <div className="text-center py-10 px-4">
-            <p className="text-slate-500 text-sm mb-4">You haven't requested any property tours yet.</p>
-            <Link href="/" className="text-sm font-bold text-blue-600 hover:text-blue-800">
-              Browse Available Properties &rarr;
+            <div className="text-4xl mb-3">🗝️</div>
+            <p className="text-slate-500 font-medium mb-4">You haven't requested any property tours yet.</p>
+            <Link href="/" className="inline-block bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-lg text-sm font-bold shadow-sm transition-colors">
+              Browse Available Properties
             </Link>
           </div>
         )}
       </div>
+
+      {/* 5. MOUNT THE CHAT MODAL */}
+      {selectedTour && (
+        <TourChatModal
+          isOpen={!!selectedTour}
+          onClose={() => setSelectedTour(null)}
+          tourId={selectedTour.id}
+          propertyTitle={selectedTour.propertyTitle}
+          tourDate={selectedTour.tourDate}
+          status={selectedTour.status}
+          currentUserId={user.id} // We pass the logged-in user's DB ID to align the chat bubbles
+        />
+      )}
 
     </div>
   );
