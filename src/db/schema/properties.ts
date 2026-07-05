@@ -9,6 +9,8 @@ export const properties = pgTable("properties", {
   
   // The column to store our Cloud Image Link
   imageUrl: text("image_url"), 
+
+  gallery: text("gallery").array(),
   
   pricePerMonth: integer("price_per_month").notNull(),
   location: text("location").notNull(),
