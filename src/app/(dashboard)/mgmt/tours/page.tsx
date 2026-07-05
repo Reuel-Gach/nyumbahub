@@ -2,11 +2,27 @@ import React from "react";
 import Link from "next/link";
 import { getLandlordTours } from "@/lib/actions/tours";
 import TourActionButtons from "@/components/TourActionButtons";
+import TourChatButton from "@/components/TourChatButton"; // NEW IMPORTS
+import { currentUser } from "@clerk/nextjs/server";
+import { db } from "@/db";
+import { users } from "@/db/schema/users";
+import { eq } from "drizzle-orm";
 
 export const dynamic = 'force-dynamic';
 
 export default async function ToursPage() {
   const tours = await getLandlordTours();
+
+  // 1. Fetch the Landlord's Database ID for the Chat Modal
+  const clerkUser = await currentUser();
+  let currentUserId = "";
+  
+  if (clerkUser) {
+    const existingUsers = await db.select().from(users).where(eq(users.clerkId, clerkUser.id));
+    if (existingUsers.length > 0) {
+      currentUserId = existingUsers[0].id;
+    }
+  }
 
   return (
     <div className="max-w-4xl mx-auto p-4 sm:p-8">
@@ -23,7 +39,9 @@ export default async function ToursPage() {
           <div className="divide-y divide-slate-100">
             {tours.map((tour) => (
               <div key={tour.id} className="p-6 hover:bg-slate-50 transition-colors flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                <div>
+                
+                {/* Left Side: Tour Details */}
+                <div className="w-full sm:w-auto">
                   <div className="flex items-center gap-3 mb-2">
                     <h3 className="font-bold text-slate-800">{tour.tenantName}</h3>
                     <span className="text-xs px-2 py-0.5 bg-blue-50 text-blue-700 rounded-full font-semibold">
@@ -42,8 +60,10 @@ export default async function ToursPage() {
                   )}
                 </div>
                 
-                <div className="flex-shrink-0">
-                  {/* FULLY UPDATED: We are now passing the missing propertyId and tenant details! */}
+                {/* Right Side: Actions (Accept/Decline + Chat) */}
+                <div className="flex-shrink-0 flex flex-col items-end gap-3 w-full sm:w-auto mt-4 sm:mt-0 pt-4 sm:pt-0 border-t sm:border-t-0 border-slate-100">
+                  
+                  {/* Status Buttons */}
                   <TourActionButtons 
                     tourId={tour.id} 
                     currentStatus={tour.status} 
@@ -52,7 +72,15 @@ export default async function ToursPage() {
                     tenantEmail={tour.tenantEmail}
                     rentAmount={tour.pricePerMonth || 0}
                   />
+
+                  {/* NEW: The Chat Button */}
+                  <TourChatButton 
+                    tour={tour} 
+                    currentUserId={currentUserId} 
+                  />
+
                 </div>
+
               </div>
             ))}
           </div>

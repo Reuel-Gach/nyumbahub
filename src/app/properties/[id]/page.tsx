@@ -4,10 +4,11 @@ import { db } from "@/db";
 import { properties } from "@/db/schema/properties";
 import { users } from "@/db/schema/users";
 import { eq } from "drizzle-orm";
-import TourBookingForm from "@/components/TourBookingForm"; // <-- NEW: Import the booking widget
+import TourBookingForm from "@/components/TourBookingForm";
+import ImageGallery from "@/components/ImageGallery"; // <-- NEW IMPORT
 
 export default async function PropertyDetailsPage({ params }: { params: { id: string } }) {
-  // Fetch Property AND Landlord details in a single optimized query
+  // Fetch Property AND Landlord details
   const result = await db
     .select({
       id: properties.id,
@@ -17,8 +18,9 @@ export default async function PropertyDetailsPage({ params }: { params: { id: st
       location: properties.location,
       isAvailable: properties.isAvailable,
       createdAt: properties.createdAt,
-      imageUrl: properties.imageUrl,     // <-- NEW: Fetch the image
-      landlordId: properties.landlordId, // <-- NEW: Fetch the landlord ID for the form
+      imageUrl: properties.imageUrl,     
+      gallery: properties.gallery,       // <-- NEW: Fetch the gallery array from DB!
+      landlordId: properties.landlordId, 
       landlordName: users.fullName,
       landlordEmail: users.email,
     })
@@ -58,14 +60,12 @@ export default async function PropertyDetailsPage({ params }: { params: { id: st
           
           <div className="lg:col-span-2 space-y-6">
             
-            {/* NEW: Dynamic Image Rendering */}
-            <div className="w-full h-72 md:h-96 bg-slate-200 rounded-2xl border border-slate-300 flex items-center justify-center overflow-hidden relative">
-              {property.imageUrl ? (
-                <img src={property.imageUrl} alt={property.title} className="w-full h-full object-cover" />
-              ) : (
-                <svg className="w-16 h-16 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-              )}
-            </div>
+            {/* NEW: The Interactive Image Gallery */}
+            <ImageGallery 
+              coverImage={property.imageUrl} 
+              gallery={property.gallery} 
+              title={property.title} 
+            />
 
             <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
               <div className="flex justify-between items-start mb-4">
@@ -116,7 +116,6 @@ export default async function PropertyDetailsPage({ params }: { params: { id: st
                 </div>
               </div>
               
-              {/* NEW: Only show the booking form if the property is actually available! */}
               {property.isAvailable ? (
                 <TourBookingForm propertyId={property.id} landlordId={property.landlordId} />
               ) : (

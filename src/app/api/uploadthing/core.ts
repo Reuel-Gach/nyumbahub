@@ -7,7 +7,8 @@ const f = createUploadthing();
 
 export const ourFileRouter = {
   // Define the route for property images
-  propertyImage: f({ image: { maxFileSize: "4MB", maxFileCount: 1 } })
+  // UPDATED: maxFileCount bumped to 10 to allow batch uploads for the property gallery!
+  propertyImage: f({ image: { maxFileSize: "4MB", maxFileCount: 10 } })
     // Middleware runs on your server BEFORE the upload starts
     .middleware(async () => {
       // 1. Verify the user is logged in via Clerk
