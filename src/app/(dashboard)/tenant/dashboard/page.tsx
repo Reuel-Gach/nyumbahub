@@ -5,34 +5,25 @@ import { db } from "@/db";
 import { users } from "@/db/schema/users";
 import { tourRequests } from "@/db/schema/tours";
 import { properties } from "@/db/schema/properties";
-import { eq, desc } from "drizzle-orm";
+import { leases } from "@/db/schema/leases"; // <-- NEW IMPORT
+import { eq, desc, and } from "drizzle-orm";
 import TourChatButton from "@/components/TourChatButton";
+import MpesaPaymentButton from "@/components/MpesaPaymentButton"; // <-- NEW IMPORT
 
 export const dynamic = 'force-dynamic';
 
 export default async function TenantDashboardPage() {
-  // 1. Securely identify the user
   const clerkUser = await currentUser();
   if (!clerkUser) {
-    return (
-      <div className="p-8 text-center text-slate-500">
-        Please log in to view your dashboard.
-      </div>
-    );
+    return <div className="p-8 text-center text-slate-500">Please log in to view your dashboard.</div>;
   }
 
-  // 2. Find their Database ID
   const [dbUser] = await db.select().from(users).where(eq(users.clerkId, clerkUser.id));
-  
   if (!dbUser) {
-    return (
-      <div className="p-8 text-center text-slate-500">
-        Setting up your account profile... please refresh.
-      </div>
-    );
+    return <div className="p-8 text-center text-slate-500">Setting up your account profile... please refresh.</div>;
   }
 
-  // 3. Fetch all their Tour Requests (joined with property details)
+  // 1. Fetch Tour Requests
   const myTours = await db
     .select({
       id: tourRequests.id,
@@ -48,9 +39,26 @@ export default async function TenantDashboardPage() {
     .where(eq(tourRequests.tenantId, dbUser.id))
     .orderBy(desc(tourRequests.createdAt));
 
+  // 2. NEW: Fetch Active Leases for Rent Payment
+  const myLeases = await db
+    .select({
+      id: leases.id,
+      status: leases.status,
+      propertyTitle: properties.title,
+      propertyLocation: properties.location,
+      rentAmount: properties.pricePerMonth, // Assuming rent is tied to property price
+    })
+    .from(leases)
+    .innerJoin(properties, eq(leases.propertyId, properties.id))
+    .where(
+      and(
+        eq(leases.tenantId, dbUser.id),
+        eq(leases.status, "active") // Only show payments for active leases
+      )
+    );
+
   return (
     <div className="max-w-5xl mx-auto p-4 sm:p-6 lg:p-8 mt-4">
-      
       {/* HEADER */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4">
         <div>
@@ -60,14 +68,45 @@ export default async function TenantDashboardPage() {
           <p className="text-slate-500 mt-1">Manage your home, rent payments, and tour requests.</p>
         </div>
         
-        {/* Bridge to Landlord Mode */}
-        <Link
-          href="/mgmt/properties/new"
-          className="bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 px-4 py-2.5 rounded-lg font-bold transition-colors shadow-sm text-sm flex items-center gap-2"
-        >
+        <Link href="/mgmt/properties/new" className="bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 px-4 py-2.5 rounded-lg font-bold transition-colors shadow-sm text-sm flex items-center gap-2">
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path></svg>
           Own a property? List it here
         </Link>
+      </div>
+
+      {/* NEW SECTION: ACTIVE LEASES & RENT PAYMENTS */}
+      <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden mb-8">
+        <div className="bg-emerald-50 px-6 py-4 border-b border-emerald-100 flex items-center justify-between">
+          <h2 className="text-lg font-bold text-emerald-900">🏡 My Home & Rent</h2>
+        </div>
+        
+        {myLeases.length > 0 ? (
+          <div className="divide-y divide-slate-100">
+            {myLeases.map((lease) => (
+              <div key={lease.id} className="p-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 hover:bg-slate-50 transition-colors">
+                <div>
+                  <h3 className="font-bold text-slate-800 text-xl">{lease.propertyTitle}</h3>
+                  <p className="text-sm text-slate-500 mt-1">📍 {lease.propertyLocation}</p>
+                  <p className="mt-2 text-sm font-medium text-slate-600">
+                    Monthly Rent: <span className="font-bold text-slate-900">Ksh {lease.rentAmount.toLocaleString()}</span>
+                  </p>
+                </div>
+                
+                <div className="w-full sm:w-auto mt-4 sm:mt-0">
+                  <MpesaPaymentButton 
+                    leaseId={lease.id} 
+                    amount={lease.rentAmount} 
+                    propertyTitle={lease.propertyTitle} 
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="text-center py-8 px-4">
+            <p className="text-slate-500 font-medium">You do not have any active leases yet.</p>
+          </div>
+        )}
       </div>
 
       {/* MY TOUR REQUESTS */}
@@ -81,7 +120,6 @@ export default async function TenantDashboardPage() {
             {myTours.map((tour) => (
               <div key={tour.id} className="p-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 hover:bg-slate-50 transition-colors">
                 
-                {/* Left Side: Property & Date Info */}
                 <div>
                   <h3 className="font-bold text-slate-800 text-lg">{tour.propertyTitle}</h3>
                   <p className="text-sm text-slate-500 mt-1">📍 {tour.propertyLocation}</p>
@@ -89,16 +127,10 @@ export default async function TenantDashboardPage() {
                     <p className="text-sm text-slate-600 bg-slate-100 px-3 py-1 rounded-md">
                       Date: <span className="font-bold">{new Date(tour.tourDate).toLocaleDateString('en-GB')}</span>
                     </p>
-                    
-                    {/* NEW: Our fully encapsulated Chat Button! */}
-                    <TourChatButton 
-                      tour={tour} 
-                      currentUserId={dbUser.id} 
-                    />
+                    <TourChatButton tour={tour} currentUserId={dbUser.id} />
                   </div>
                 </div>
                 
-                {/* Right Side: Status Badge */}
                 <div className="w-full sm:w-auto text-left sm:text-right border-t sm:border-t-0 border-slate-100 pt-3 sm:pt-0">
                   <span className={`inline-block px-4 py-2 rounded-full text-xs font-bold uppercase tracking-wide
                     ${tour.status === 'approved' ? 'bg-blue-100 text-blue-800' : 
