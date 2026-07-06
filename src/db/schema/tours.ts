@@ -9,6 +9,9 @@ export const tourRequests = pgTable("tour_requests", {
   propertyId: uuid("property_id").references(() => properties.id, { onDelete: "cascade" }).notNull(),
   landlordId: uuid("landlord_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
   
+  // 🔥 NEW: Link the tour request directly to the tenant's user account
+  tenantId: uuid("tenant_id").references(() => users.id, { onDelete: "cascade" }),
+  
   // Tenant Contact Info
   tenantName: varchar("tenant_name", { length: 255 }).notNull(),
   tenantEmail: varchar("tenant_email", { length: 255 }).notNull(),
