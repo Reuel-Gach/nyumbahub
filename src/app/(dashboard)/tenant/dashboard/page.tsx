@@ -6,10 +6,11 @@ import { users } from "@/db/schema/users";
 import { tourRequests } from "@/db/schema/tours";
 import { properties } from "@/db/schema/properties";
 import { leases } from "@/db/schema/leases";
-import { eq, desc, and, or, inArray } from "drizzle-orm"; // <-- 'inArray' added here
+import { eq, desc, and, or, inArray } from "drizzle-orm";
 import TourChatButton from "@/components/TourChatButton";
 import MpesaPaymentButton from "@/components/MpesaPaymentButton";
 import MoveOutButton from "@/components/MoveOutButton";
+import EarlyTerminationResponse from "@/components/EarlyTerminationResponse";
 
 export const dynamic = 'force-dynamic';
 
@@ -21,7 +22,6 @@ export default async function TenantDashboardPage() {
 
   const primaryEmail = clerkUser.emailAddresses[0]?.emailAddress;
 
-  // 1. Build search conditions to catch the real ID, the "pending_" ID, or their email
   const searchConditions = [
     eq(users.clerkId, clerkUser.id),
     eq(users.clerkId, `pending_${clerkUser.id}`)
@@ -30,40 +30,27 @@ export default async function TenantDashboardPage() {
     searchConditions.push(eq(users.email, primaryEmail));
   }
 
-  // 2. Fetch the user (using 'let' so we can reassign if we auto-heal)
-  let [dbUser] = await db
-    .select()
-    .from(users)
-    .where(or(...searchConditions));
+  let [dbUser] = await db.select().from(users).where(or(...searchConditions));
 
-  // 🔥 AUTO-HEAL 1: Found the user, but they have a "pending_" ID or mismatched ID. Fix it!
   if (dbUser && dbUser.clerkId !== clerkUser.id) {
-    console.log("Healing mismatched Clerk ID in database...");
-    const [updatedUser] = await db
-      .update(users)
+    const [updatedUser] = await db.update(users)
       .set({ clerkId: clerkUser.id })
       .where(eq(users.id, dbUser.id))
       .returning();
-    
     dbUser = updatedUser;
   }
 
-  // 🔥 AUTO-HEAL 2: User doesn't exist at all. Create them instantly!
   if (!dbUser) {
-    console.log("User missing from DB. Creating now...");
     const name = `${clerkUser.firstName || ""} ${clerkUser.lastName || ""}`.trim() || "Resident";
-
     const [newUser] = await db.insert(users).values({
       clerkId: clerkUser.id,
       email: primaryEmail || "no-email@clerk.com",
       fullName: name,
       role: "tenant", 
     }).returning();
-
     dbUser = newUser;
   }
 
-  // 3. Fetch Tour Requests
   const myTours = await db
     .select({
       id: tourRequests.id,
@@ -79,7 +66,7 @@ export default async function TenantDashboardPage() {
     .where(eq(tourRequests.tenantId, dbUser.id))
     .orderBy(desc(tourRequests.createdAt));
 
-  // 4. Fetch Active Leases for Rent Payment (UPDATED to include notice periods)
+  // 🔥 Fetching the termination reason, move-out date, and tracking the early termination offer
   const myLeases = await db
     .select({
       id: leases.id,
@@ -87,19 +74,20 @@ export default async function TenantDashboardPage() {
       propertyTitle: properties.title,
       propertyLocation: properties.location,
       rentAmount: properties.pricePerMonth,
+      terminationReason: leases.terminationReason,
+      moveOutDate: leases.moveOutDate,
     })
     .from(leases)
     .innerJoin(properties, eq(leases.propertyId, properties.id))
     .where(
       and(
         eq(leases.tenantId, dbUser.id),
-        inArray(leases.status, ["active", "move_out_pending", "eviction_notice"]) // <-- Keep visible during notice periods
+        inArray(leases.status, ["active", "move_out_pending", "eviction_notice", "early_termination_offered"]) 
       )
     );
 
   return (
     <div className="max-w-5xl mx-auto p-4 sm:p-6 lg:p-8 mt-4">
-      {/* HEADER */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4">
         <div>
           <h1 className="text-3xl font-bold text-slate-800">
@@ -107,7 +95,6 @@ export default async function TenantDashboardPage() {
           </h1>
           <p className="text-slate-500 mt-1">Manage your home, rent payments, and tour requests.</p>
         </div>
-        
         <Link href="/mgmt/properties/new" className="bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 px-4 py-2.5 rounded-lg font-bold transition-colors shadow-sm text-sm flex items-center gap-2">
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path></svg>
           Own a property? List it here
@@ -123,39 +110,82 @@ export default async function TenantDashboardPage() {
         {myLeases.length > 0 ? (
           <div className="divide-y divide-slate-100">
             {myLeases.map((lease) => (
-              <div key={lease.id} className="p-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 hover:bg-slate-50 transition-colors">
-                <div>
-                  <h3 className="font-bold text-slate-800 text-xl">{lease.propertyTitle}</h3>
-                  <p className="text-sm text-slate-500 mt-1">📍 {lease.propertyLocation}</p>
-                  <p className="mt-2 text-sm font-medium text-slate-600">
-                    Monthly Rent: <span className="font-bold text-slate-900">Ksh {lease.rentAmount.toLocaleString()}</span>
-                  </p>
-                </div>
+              <div key={lease.id} className="p-6 hover:bg-slate-50 transition-colors">
                 
-                {/* ACTION BUTTONS */}
-                <div className="w-full sm:w-auto mt-4 sm:mt-0 flex flex-col sm:flex-row items-center gap-3">
+                {/* Top Row: Details & Buttons */}
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                  <div>
+                    <h3 className="font-bold text-slate-800 text-xl">{lease.propertyTitle}</h3>
+                    <p className="text-sm text-slate-500 mt-1">📍 {lease.propertyLocation}</p>
+                    <p className="mt-2 text-sm font-medium text-slate-600">
+                      Monthly Rent: <span className="font-bold text-slate-900">Ksh {lease.rentAmount.toLocaleString()}</span>
+                    </p>
+                  </div>
                   
-                  {/* Status Badges or Move-Out Button */}
-                  {lease.status === "active" ? (
-                    <MoveOutButton leaseId={lease.id} />
-                  ) : lease.status === "move_out_pending" ? (
-                    <span className="px-4 py-2 bg-amber-50 text-amber-700 border border-amber-200 rounded-lg text-sm font-bold flex items-center gap-2">
-                      <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-                      Move-Out Pending
-                    </span>
-                  ) : lease.status === "eviction_notice" ? (
-                    <span className="px-4 py-2 bg-rose-50 text-rose-700 border border-rose-200 rounded-lg text-sm font-bold flex items-center gap-2">
-                      ⚠️ Eviction Notice
-                    </span>
-                  ) : null}
+                  <div className="w-full sm:w-auto mt-4 sm:mt-0 flex flex-col sm:flex-row items-center gap-3">
+                    {/* 🔥 UPDATED: Handshake Status Badge */}
+                    {lease.status === "active" ? (
+                      <MoveOutButton leaseId={lease.id} />
+                    ) : lease.status === "early_termination_offered" ? (
+                      <span className="px-4 py-2 bg-blue-50 text-blue-700 border border-blue-200 rounded-lg text-sm font-bold flex items-center gap-2">
+                        Offer Pending
+                      </span>
+                    ) : lease.status === "move_out_pending" ? (
+                      <span className="px-4 py-2 bg-amber-50 text-amber-700 border border-amber-200 rounded-lg text-sm font-bold flex items-center gap-2">
+                        Move-Out Pending
+                      </span>
+                    ) : lease.status === "eviction_notice" ? (
+                      <span className="px-4 py-2 bg-rose-50 text-rose-700 border border-rose-200 rounded-lg text-sm font-bold flex items-center gap-2">
+                        ⚠️ Notice to Vacate
+                      </span>
+                    ) : null}
 
-                  {/* Payment Button - Rent is still due during the notice period! */}
-                  <MpesaPaymentButton 
-                    leaseId={lease.id} 
-                    amount={lease.rentAmount} 
-                    propertyTitle={lease.propertyTitle} 
-                  />
+                    <MpesaPaymentButton 
+                      leaseId={lease.id} 
+                      amount={lease.rentAmount} 
+                      propertyTitle={lease.propertyTitle} 
+                    />
+                  </div>
                 </div>
+
+                {/* 🔥 NEW: The Early Termination Offer Banner (The Handshake UI) */}
+                {lease.status === "early_termination_offered" && (
+                  <EarlyTerminationResponse leaseId={lease.id} />
+                )}
+
+                {/* Legal Warning Banners */}
+                {lease.status === "eviction_notice" && (
+                  <div className="mt-5 p-4 bg-rose-50 border border-rose-200 rounded-xl text-rose-800 w-full">
+                    <div className="flex items-start gap-3">
+                      <span className="text-2xl mt-0.5">⚠️</span>
+                      <div>
+                        <h4 className="font-bold text-base">Legal Notice to Vacate</h4>
+                        <p className="text-sm mt-1">Your landlord has issued a 30-day notice to terminate your tenancy.</p>
+                        <div className="mt-3 bg-white/60 p-3 rounded-lg border border-rose-100">
+                          <p className="text-sm"><strong>Reason:</strong> {lease.terminationReason || "No reason provided."}</p>
+                          <p className="text-sm mt-1 text-rose-900">
+                            <strong>Move-out Deadline:</strong> {lease.moveOutDate ? new Date(lease.moveOutDate).toLocaleDateString('en-GB', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) : "Pending"}
+                          </p>
+                        </div>
+                        <p className="text-xs mt-3 opacity-80">Please ensure all rent is cleared and the property is vacated by the deadline. Contact your landlord directly if you wish to dispute this notice.</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Friendly banner for their own 30-day move-out requests */}
+                {lease.status === "move_out_pending" && lease.moveOutDate && (
+                  <div className="mt-5 p-4 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 w-full">
+                    <div className="flex items-center gap-3">
+                      <span className="text-xl">📅</span>
+                      <div>
+                        <h4 className="font-bold text-sm">Move-Out Scheduled</h4>
+                        <p className="text-sm mt-0.5">Your tenancy is scheduled to end on <strong>{new Date(lease.moveOutDate).toLocaleDateString('en-GB')}</strong>. Please ensure the property is clean for deposit processing.</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
               </div>
             ))}
           </div>
@@ -198,7 +228,6 @@ export default async function TenantDashboardPage() {
                     {tour.status}
                   </span>
                 </div>
-
               </div>
             ))}
           </div>

@@ -1,11 +1,14 @@
 import React from "react";
 import Link from "next/link";
 import { currentUser } from "@clerk/nextjs/server";
-import { eq } from "drizzle-orm";
+import { eq, and, inArray } from "drizzle-orm"; // <-- Added 'and' & 'inArray'
 
-// FIXED: Using explicit relative paths to prevent silent import crashes
+// FIXED: Corrected import syntax and kept your relative paths
+import EvictionModal from "../../../../components/EvictionModal";
 import { db } from "../../../../db"; 
 import { users } from "../../../../db/schema/users";
+import { leases } from "../../../../db/schema/leases"; // <-- NEW IMPORT
+import { properties } from "../../../../db/schema/properties"; // <-- NEW IMPORT
 import { getLandlordProperties } from "../../../../lib/actions/properties";
 import { getTenantDashboardData } from "../../../../lib/actions/tenant"; 
 import PropertyActions from "../../../../components/PropertyActions";
@@ -40,14 +43,12 @@ export default async function DashboardPage() {
   const myProperties = await getLandlordProperties();
 
   // 3. AUTO-UPGRADE (Self-Healing)
-  // If they have properties but their role is stuck as a tenant, fix it.
   if (myProperties.length > 0 && dbUser.role !== "landlord") {
     await db.update(users).set({ role: "landlord" }).where(eq(users.id, dbUser.id));
     dbUser.role = "landlord";
   }
 
   // 4. ROLE-BASED REDIRECT
-  // If they genuinely have no properties and their role is tenant, show Tenant Dashboard
   if (dbUser.role !== "landlord") {
     const tenantData = await getTenantDashboardData();
     return <TenantDashboardView tenantData={tenantData} />;
@@ -56,6 +57,25 @@ export default async function DashboardPage() {
   // ==========================================
   // 5. LANDLORD VIEW 
   // ==========================================
+  
+  // NEW: Fetch all active/pending leases (Tenants) for this landlord
+  const activeTenants = await db
+    .select({
+      id: leases.id,
+      status: leases.status,
+      rentAmount: leases.rentAmount,
+      propertyTitle: properties.title,
+      tenantName: users.fullName,
+    })
+    .from(leases)
+    .innerJoin(properties, eq(leases.propertyId, properties.id))
+    .innerJoin(users, eq(leases.tenantId, users.id))
+    .where(
+      and(
+        eq(leases.landlordId, dbUser.id),
+        inArray(leases.status, ["active", "move_out_pending", "eviction_notice"])
+      )
+    );
   
   const totalUnits = myProperties.length;
   const activeUnits = myProperties.filter(p => p.isAvailable).length;
@@ -106,6 +126,58 @@ export default async function DashboardPage() {
         </div>
       </div>
 
+      {/* NEW: Tenant & Lease Management Section */}
+      <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden mb-8">
+        <div className="bg-rose-50 border-b border-rose-100 px-6 py-4 flex items-center justify-between">
+          <h2 className="text-lg font-bold text-rose-900">👥 Active Tenants & Leases</h2>
+        </div>
+        
+        {activeTenants.length > 0 ? (
+          <div className="divide-y divide-slate-100">
+            {activeTenants.map((lease) => (
+              <div key={lease.id} className="p-6 flex flex-col md:flex-row items-center justify-between gap-4 hover:bg-slate-50 transition-colors">
+                
+                <div className="flex-grow">
+                  <h3 className="text-lg font-bold text-slate-800">
+                    {lease.tenantName || "Unknown Tenant"}
+                  </h3>
+                  <p className="text-sm text-slate-500 mt-1">🏠 {lease.propertyTitle}</p>
+                  <p className="text-sm font-medium text-slate-600 mt-1">
+                    Rent: Ksh {lease.rentAmount.toLocaleString()} / mo
+                  </p>
+                </div>
+                
+                <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto">
+                  {/* Status Indicator */}
+                  {lease.status === "move_out_pending" && (
+                     <span className="px-3 py-1.5 bg-amber-100 text-amber-800 rounded-lg text-xs font-bold uppercase tracking-wide">
+                       Requested Move-Out
+                     </span>
+                  )}
+                  {lease.status === "eviction_notice" && (
+                     <span className="px-3 py-1.5 bg-rose-100 text-rose-800 rounded-lg text-xs font-bold uppercase tracking-wide">
+                       Eviction Pending
+                     </span>
+                  )}
+                  
+                  {/* The Eviction / Finalize Modal */}
+                  <EvictionModal 
+                    leaseId={lease.id} 
+                    tenantName={lease.tenantName || "Tenant"} 
+                    currentStatus={lease.status} 
+                  />
+                </div>
+
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="text-center py-10 px-4">
+            <p className="text-slate-500 font-medium">You currently have no active tenants.</p>
+          </div>
+        )}
+      </div>
+
       {/* Properties List */}
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
         <div className="bg-slate-50 border-b border-slate-200 px-6 py-4">
@@ -151,6 +223,7 @@ export default async function DashboardPage() {
           </div>
         )}
       </div>
+      
     </div>
   );
 }

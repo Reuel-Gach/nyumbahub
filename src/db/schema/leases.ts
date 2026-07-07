@@ -20,7 +20,7 @@ export const leases = pgTable("leases", {
   
   // 🔥 UPDATED: Added transition states for move-out and eviction
   status: varchar("status", { 
-    enum: ["active", "pending", "move_out_pending", "eviction_notice", "terminated", "ended", "cancelled"] 
+    enum: ["active", "pending", "move_out_pending", "eviction_notice", "early_termination_offered", "terminated", "ended", "cancelled"] 
   }).default("active").notNull(),
   
   // 🔥 NEW: Termination and Eviction Tracking (Kenyan Law Compliance)
