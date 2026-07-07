@@ -63,7 +63,6 @@ export async function createProperty(formData: FormData) {
     
   let databaseUser = existingUsers[0];
 
-  // If they don't exist at all, create them
   if (!databaseUser) {
     const primaryEmail = clerkUser.emailAddresses[0]?.emailAddress || "no-email@provided.com";
     const fullName = `${clerkUser.firstName || ''} ${clerkUser.lastName || ''}`.trim();
@@ -81,7 +80,6 @@ export async function createProperty(formData: FormData) {
 
     databaseUser = insertedUsers[0]; 
   } else if (databaseUser.role !== "landlord") {
-    // 🔥 THE UPGRADE: If they already exist as a tenant, upgrade them to a landlord instantly!
     await db.update(users)
       .set({ role: "landlord" })
       .where(eq(users.id, databaseUser.id));
@@ -94,15 +92,16 @@ export async function createProperty(formData: FormData) {
   const price = parseInt(formData.get("pricePerMonth") as string);
   const description = formData.get("description") as string;
   
-  // The Cover Image
+  // 🔥 NEW: Extract Category and SubType
+  const category = formData.get("category") as string || "Residential";
+  const subType = formData.get("subType") as string || "Apartment";
+  
   const imageUrl = formData.get("imageUrl") as string;
 
-  // 🔥 MULTI-IMAGE GALLERY LOGIC
   let galleryUrls: string[] = [];
   const galleryData = formData.getAll("gallery");
   
   if (galleryData.length > 0) {
-    // Check if the frontend sent a single stringified JSON array
     if (galleryData.length === 1 && typeof galleryData[0] === "string" && galleryData[0].startsWith("[")) {
       try {
         galleryUrls = JSON.parse(galleryData[0]);
@@ -110,7 +109,6 @@ export async function createProperty(formData: FormData) {
         galleryUrls = [galleryData[0]];
       }
     } else {
-      // Or if the frontend appended multiple separate "gallery" inputs
       galleryUrls = galleryData.map(val => val.toString());
     }
   }
@@ -118,11 +116,13 @@ export async function createProperty(formData: FormData) {
   await db.insert(properties).values({
     landlordId: databaseUser.id, 
     title,
+    category, // 🔥 Save Category
+    subType,  // 🔥 Save SubType
     location,
     pricePerMonth: price,
     description,
     imageUrl, 
-    gallery: galleryUrls, // Save the array of images
+    gallery: galleryUrls,
   });
 
   revalidatePath("/mgmt/properties/new");
@@ -203,9 +203,13 @@ export async function updateProperty(
   const location = formData.get("location") as string;
   const price = parseInt(formData.get("pricePerMonth") as string);
   const description = formData.get("description") as string;
+  
+  // 🔥 NEW: Extract Category and SubType for updates
+  const category = formData.get("category") as string;
+  const subType = formData.get("subType") as string;
+  
   const imageUrl = formData.get("imageUrl") as string; 
 
-  // Process gallery for updates
   let galleryUrls: string[] = [];
   const galleryData = formData.getAll("gallery");
   
@@ -229,6 +233,9 @@ export async function updateProperty(
     description,
   };
 
+  // 🔥 Safely append new fields to the update payload
+  if (category) updateData.category = category;
+  if (subType) updateData.subType = subType;
   if (imageUrl) updateData.imageUrl = imageUrl;
   if (galleryUrls.length > 0) updateData.gallery = galleryUrls;
 

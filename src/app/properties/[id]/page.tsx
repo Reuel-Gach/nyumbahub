@@ -5,7 +5,7 @@ import { properties } from "@/db/schema/properties";
 import { users } from "@/db/schema/users";
 import { eq } from "drizzle-orm";
 import TourBookingForm from "@/components/TourBookingForm";
-import ImageGallery from "@/components/ImageGallery"; // <-- NEW IMPORT
+import ImageGallery from "@/components/ImageGallery"; 
 
 export default async function PropertyDetailsPage({ params }: { params: { id: string } }) {
   // Fetch Property AND Landlord details
@@ -19,7 +19,10 @@ export default async function PropertyDetailsPage({ params }: { params: { id: st
       isAvailable: properties.isAvailable,
       createdAt: properties.createdAt,
       imageUrl: properties.imageUrl,     
-      gallery: properties.gallery,       // <-- NEW: Fetch the gallery array from DB!
+      gallery: properties.gallery,
+      // 🔥 NEW: Fetching the new classification fields
+      category: properties.category,
+      subType: properties.subType,
       landlordId: properties.landlordId, 
       landlordName: users.fullName,
       landlordEmail: users.email,
@@ -45,6 +48,19 @@ export default async function PropertyDetailsPage({ params }: { params: { id: st
     );
   }
 
+  // 🔥 NEW: Dynamic colors based on the property category
+  const getCategoryStyles = (category: string | null) => {
+    switch (category) {
+      case "Commercial":
+        return "bg-emerald-50 text-emerald-700 border-emerald-200";
+      case "Land":
+        return "bg-amber-50 text-amber-700 border-amber-200";
+      case "Residential":
+      default:
+        return "bg-blue-50 text-blue-700 border-blue-200";
+    }
+  };
+
   return (
     <div className="min-h-screen bg-slate-50 py-8 px-4 sm:px-6 lg:px-8">
       <div className="max-w-5xl mx-auto">
@@ -60,7 +76,6 @@ export default async function PropertyDetailsPage({ params }: { params: { id: st
           
           <div className="lg:col-span-2 space-y-6">
             
-            {/* NEW: The Interactive Image Gallery */}
             <ImageGallery 
               coverImage={property.imageUrl} 
               gallery={property.gallery} 
@@ -68,6 +83,17 @@ export default async function PropertyDetailsPage({ params }: { params: { id: st
             />
 
             <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+              
+              {/* 🔥 NEW: Category & SubType Tags */}
+              <div className="flex items-center gap-2 mb-4">
+                <span className={`px-3 py-1 rounded-md text-xs font-black uppercase tracking-wider border ${getCategoryStyles(property.category)}`}>
+                  {property.subType || "Property"}
+                </span>
+                <span className="text-sm font-medium text-slate-500">
+                  {property.category || "Residential"}
+                </span>
+              </div>
+
               <div className="flex justify-between items-start mb-4">
                 <h1 className="text-3xl font-extrabold text-slate-900">{property.title}</h1>
                 {property.isAvailable ? (

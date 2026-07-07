@@ -8,21 +8,32 @@ export const dynamic = 'force-dynamic';
 export default async function RootPage({ 
   searchParams 
 }: { 
-  searchParams: { query?: string; maxPrice?: string } 
+  // 🔥 UPDATED: Added category to the URL parameters
+  searchParams: { query?: string; maxPrice?: string; category?: string } 
 }) {
   
   const query = searchParams.query || undefined;
   const maxPrice = searchParams.maxPrice ? parseInt(searchParams.maxPrice) : undefined;
+  const category = searchParams.category || undefined; // 🔥 Extract category from URL
 
-  const propertyList = await getAvailableProperties({ query, maxPrice });
+  // 🔥 Pass category to the database query
+  const propertyList = await getAvailableProperties({ query, maxPrice, category });
+
+  // 🔥 Helper function for the new dynamic badge colors
+  const getCategoryStyles = (cat: string) => {
+    switch (cat) {
+      case "Commercial":
+        return "bg-emerald-50 text-emerald-700 border-emerald-200";
+      case "Land":
+        return "bg-amber-50 text-amber-700 border-amber-200";
+      case "Residential":
+      default:
+        return "bg-blue-50 text-blue-700 border-blue-200";
+    }
+  };
 
   return (
     <div className="min-h-screen bg-slate-50 pb-16">
-      {/* 
-        UI Optimization: Removed the duplicate "NyumbaHub" title text.
-        Replaced with a clean, low-profile contextual header that complements 
-        the top navbar layout seamlessly without fighting for visual dominance.
-      */}
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 space-y-6">
         
         {/* Modernized, Compact Value Proposition */}
@@ -58,15 +69,25 @@ export default async function RootPage({
                 
                 <div className="p-5 flex-grow flex flex-col justify-between">
                   <div>
+                    {/* 🔥 NEW: Category & SubType Tags */}
+                    <div className="flex items-center gap-2 mb-3">
+                      <span className={`px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider border ${getCategoryStyles(property.category)}`}>
+                        {property.subType || "Property"}
+                      </span>
+                      <span className="text-xs font-medium text-slate-500">
+                        {property.category || "Residential"}
+                      </span>
+                    </div>
+
                     <div className="flex items-start justify-between gap-2 mb-2">
                       <h2 className="text-lg font-bold text-slate-800 line-clamp-1">
                         {property.title}
                       </h2>
                       {property.status === 'active_listing' && (
-  <span className="bg-emerald-50 text-emerald-700 text-xs font-semibold px-2.5 py-1 rounded-full whitespace-nowrap">
-    Active Listing
-  </span>
-)}
+                        <span className="bg-emerald-50 text-emerald-700 text-xs font-semibold px-2.5 py-1 rounded-full whitespace-nowrap">
+                          Active Listing
+                        </span>
+                      )}
                     </div>
                     
                     <p className="text-slate-400 text-xs font-medium mb-3 flex items-center gap-1">
@@ -107,7 +128,7 @@ export default async function RootPage({
               No listings match your parameters
             </h3>
             <p className="text-slate-400 text-sm">
-              Try altering your keywords or broadening your price ceiling limits.
+              Try altering your keywords, category, or broadening your price limits.
             </p>
           </div>
         )}

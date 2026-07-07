@@ -6,6 +6,19 @@ export default function PropertyCard({ property }: { property: any }) {
   const galleryCount = property.gallery?.length || 0;
   const totalImages = 1 + galleryCount;
 
+  // 🔥 NEW: Dynamic colors based on the property category
+  const getCategoryStyles = (category: string) => {
+    switch (category) {
+      case "Commercial":
+        return "bg-emerald-50 text-emerald-700 border-emerald-200";
+      case "Land":
+        return "bg-amber-50 text-amber-700 border-amber-200";
+      case "Residential":
+      default:
+        return "bg-blue-50 text-blue-700 border-blue-200";
+    }
+  };
+
   return (
     <Link href={`/properties/${property.id}`} className="group block">
       <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden transition-all hover:shadow-md">
@@ -27,6 +40,17 @@ export default function PropertyCard({ property }: { property: any }) {
 
         {/* Content Section */}
         <div className="p-4">
+          
+          {/* 🔥 NEW: Category & SubType Tags */}
+          <div className="flex items-center gap-2 mb-2">
+            <span className={`px-2 py-1 rounded-md text-[10px] font-black uppercase tracking-wider border ${getCategoryStyles(property.category)}`}>
+              {property.subType || "Property"}
+            </span>
+            <span className="text-xs font-medium text-slate-400">
+              {property.category || "Residential"}
+            </span>
+          </div>
+
           <h3 className="font-bold text-slate-800 text-lg line-clamp-1">{property.title}</h3>
           <p className="text-sm text-slate-500 mt-1 flex items-center gap-1">
             📍 {property.location}

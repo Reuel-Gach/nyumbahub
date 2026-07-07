@@ -3,21 +3,24 @@
 import React, { useState, useRef } from "react";
 import { createProperty } from "../../../../../lib/actions/properties";
 import { UploadDropzone } from "../../../../../utils/uploadthing";
+import { getCategories, getSubTypesByCategory, PropertyCategory } from "../../../../../lib/constants/propertyTypes"; // <-- NEW IMPORT
 
 export default function NewPropertyPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   
+  // 🔥 NEW: State to track selected category for the cascading dropdown
+  const [selectedCategory, setSelectedCategory] = useState<PropertyCategory>("Residential");
+  
   // Refs for tracking image URLs synchronously
   const imageUrlRef = useRef<string>("");
-  const galleryUrlsRef = useRef<string[]>([]); // NEW: Array for multiple gallery images
+  const galleryUrlsRef = useRef<string[]>([]);
   
   // State JUST for triggering a re-render to show previews
   const [, setTriggerRender] = useState(0); 
   
   const formRef = useRef<HTMLFormElement>(null);
 
-  // Helper to remove a specific gallery image
   const removeGalleryImage = (indexToRemove: number) => {
     galleryUrlsRef.current = galleryUrlsRef.current.filter((_, idx) => idx !== indexToRemove);
     setTriggerRender(p => p + 1);
@@ -32,11 +35,9 @@ export default function NewPropertyPage() {
     try {
       const formData = new FormData(e.currentTarget);
       
-      // 1. Set the Cover Image
       formData.set("imageUrl", imageUrlRef.current);
       
-      // 2. Set the Gallery Images (using .append allows multiple values for the same key)
-      formData.delete("gallery"); // Clear any accidental DOM inputs
+      formData.delete("gallery");
       galleryUrlsRef.current.forEach((url) => {
         formData.append("gallery", url);
       });
@@ -45,11 +46,12 @@ export default function NewPropertyPage() {
       
       setShowSuccess(true);
       
-      // Reset form and refs
       imageUrlRef.current = ""; 
       galleryUrlsRef.current = []; 
       setTriggerRender(prev => prev + 1); 
       formRef.current?.reset(); 
+      // Reset dropdown to default
+      setSelectedCategory("Residential");
       
       setTimeout(() => setShowSuccess(false), 4000);
     } catch (error) {
@@ -104,7 +106,7 @@ export default function NewPropertyPage() {
         )}
       </div>
 
-      {/* 2. GALLERY IMAGES UPLOAD (Optional but recommended) */}
+      {/* 2. GALLERY IMAGES UPLOAD */}
       <div className="mb-8 p-6 bg-slate-50 rounded-xl border border-slate-200">
         <div className="flex justify-between items-end mb-4">
           <div>
@@ -116,7 +118,6 @@ export default function NewPropertyPage() {
           </span>
         </div>
         
-        {/* Gallery Thumbnails Grid */}
         {galleryUrlsRef.current.length > 0 && (
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-4">
             {galleryUrlsRef.current.map((url, index) => (
@@ -134,12 +135,10 @@ export default function NewPropertyPage() {
           </div>
         )}
 
-        {/* Upload Button for Gallery */}
         <UploadDropzone
           endpoint="propertyImage"
           onClientUploadComplete={(res) => {
             if (res && res.length > 0) {
-              // Extract all URLs and append them to our existing array
               const newUrls = res.map((r) => r.url);
               galleryUrlsRef.current = [...galleryUrlsRef.current, ...newUrls];
               setTriggerRender(p => p + 1);
@@ -155,6 +154,35 @@ export default function NewPropertyPage() {
         <div className="space-y-2">
           <label className="block text-sm font-medium text-slate-700">Property Title *</label>
           <input type="text" name="title" required placeholder="e.g. Modern 2-Bedroom in Kilimani" className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all" />
+        </div>
+
+        {/* 🔥 NEW: Category and Sub-Type Cascading Dropdowns */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-blue-50/50 p-4 rounded-xl border border-blue-100">
+          <div className="space-y-2">
+            <label className="block text-sm font-bold text-blue-900">Category *</label>
+            <select
+              name="category"
+              value={selectedCategory}
+              onChange={(e) => setSelectedCategory(e.target.value as PropertyCategory)}
+              className="w-full px-4 py-2 border border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all bg-white text-slate-700"
+            >
+              {getCategories().map(cat => (
+                <option key={cat} value={cat}>{cat}</option>
+              ))}
+            </select>
+          </div>
+          <div className="space-y-2">
+            <label className="block text-sm font-bold text-blue-900">Property Type *</label>
+            <select
+              name="subType"
+              required
+              className="w-full px-4 py-2 border border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all bg-white text-slate-700"
+            >
+              {getSubTypesByCategory(selectedCategory).map(type => (
+                <option key={type.id} value={type.name}>{type.name}</option>
+              ))}
+            </select>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

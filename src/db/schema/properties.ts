@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, uuid, integer, boolean } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, uuid, integer, boolean, varchar } from "drizzle-orm/pg-core";
 import { users } from "./users";
 
 export const properties = pgTable("properties", {
@@ -7,15 +7,18 @@ export const properties = pgTable("properties", {
   title: text("title").notNull(),
   description: text("description"),
   
+  // 🔥 NEW: Category & Sub-Type
+  category: varchar("category", { length: 50 }).default("Residential").notNull(),
+  subType: varchar("sub_type", { length: 50 }).notNull(),
+  
   // The column to store our Cloud Image Link
   imageUrl: text("image_url"), 
-
   gallery: text("gallery").array(),
   
   pricePerMonth: integer("price_per_month").notNull(),
   location: text("location").notNull(),
   
-  // REVERTED: Using boolean for stability
+  // Using boolean for stability
   isAvailable: boolean("is_available").default(true).notNull(),
   
   createdAt: timestamp("created_at").defaultNow().notNull(),
