@@ -5,10 +5,11 @@ import { db } from "@/db";
 import { users } from "@/db/schema/users";
 import { tourRequests } from "@/db/schema/tours";
 import { properties } from "@/db/schema/properties";
-import { leases } from "@/db/schema/leases"; // <-- NEW IMPORT
-import { eq, desc, and } from "drizzle-orm";
+import { leases } from "@/db/schema/leases";
+import { eq, desc, and, or, inArray } from "drizzle-orm"; // <-- 'inArray' added here
 import TourChatButton from "@/components/TourChatButton";
-import MpesaPaymentButton from "@/components/MpesaPaymentButton"; // <-- NEW IMPORT
+import MpesaPaymentButton from "@/components/MpesaPaymentButton";
+import MoveOutButton from "@/components/MoveOutButton";
 
 export const dynamic = 'force-dynamic';
 
@@ -18,12 +19,51 @@ export default async function TenantDashboardPage() {
     return <div className="p-8 text-center text-slate-500">Please log in to view your dashboard.</div>;
   }
 
-  const [dbUser] = await db.select().from(users).where(eq(users.clerkId, clerkUser.id));
-  if (!dbUser) {
-    return <div className="p-8 text-center text-slate-500">Setting up your account profile... please refresh.</div>;
+  const primaryEmail = clerkUser.emailAddresses[0]?.emailAddress;
+
+  // 1. Build search conditions to catch the real ID, the "pending_" ID, or their email
+  const searchConditions = [
+    eq(users.clerkId, clerkUser.id),
+    eq(users.clerkId, `pending_${clerkUser.id}`)
+  ];
+  if (primaryEmail) {
+    searchConditions.push(eq(users.email, primaryEmail));
   }
 
-  // 1. Fetch Tour Requests
+  // 2. Fetch the user (using 'let' so we can reassign if we auto-heal)
+  let [dbUser] = await db
+    .select()
+    .from(users)
+    .where(or(...searchConditions));
+
+  // 🔥 AUTO-HEAL 1: Found the user, but they have a "pending_" ID or mismatched ID. Fix it!
+  if (dbUser && dbUser.clerkId !== clerkUser.id) {
+    console.log("Healing mismatched Clerk ID in database...");
+    const [updatedUser] = await db
+      .update(users)
+      .set({ clerkId: clerkUser.id })
+      .where(eq(users.id, dbUser.id))
+      .returning();
+    
+    dbUser = updatedUser;
+  }
+
+  // 🔥 AUTO-HEAL 2: User doesn't exist at all. Create them instantly!
+  if (!dbUser) {
+    console.log("User missing from DB. Creating now...");
+    const name = `${clerkUser.firstName || ""} ${clerkUser.lastName || ""}`.trim() || "Resident";
+
+    const [newUser] = await db.insert(users).values({
+      clerkId: clerkUser.id,
+      email: primaryEmail || "no-email@clerk.com",
+      fullName: name,
+      role: "tenant", 
+    }).returning();
+
+    dbUser = newUser;
+  }
+
+  // 3. Fetch Tour Requests
   const myTours = await db
     .select({
       id: tourRequests.id,
@@ -39,21 +79,21 @@ export default async function TenantDashboardPage() {
     .where(eq(tourRequests.tenantId, dbUser.id))
     .orderBy(desc(tourRequests.createdAt));
 
-  // 2. NEW: Fetch Active Leases for Rent Payment
+  // 4. Fetch Active Leases for Rent Payment (UPDATED to include notice periods)
   const myLeases = await db
     .select({
       id: leases.id,
       status: leases.status,
       propertyTitle: properties.title,
       propertyLocation: properties.location,
-      rentAmount: properties.pricePerMonth, // Assuming rent is tied to property price
+      rentAmount: properties.pricePerMonth,
     })
     .from(leases)
     .innerJoin(properties, eq(leases.propertyId, properties.id))
     .where(
       and(
         eq(leases.tenantId, dbUser.id),
-        eq(leases.status, "active") // Only show payments for active leases
+        inArray(leases.status, ["active", "move_out_pending", "eviction_notice"]) // <-- Keep visible during notice periods
       )
     );
 
@@ -74,7 +114,7 @@ export default async function TenantDashboardPage() {
         </Link>
       </div>
 
-      {/* NEW SECTION: ACTIVE LEASES & RENT PAYMENTS */}
+      {/* ACTIVE LEASES & RENT PAYMENTS */}
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden mb-8">
         <div className="bg-emerald-50 px-6 py-4 border-b border-emerald-100 flex items-center justify-between">
           <h2 className="text-lg font-bold text-emerald-900">🏡 My Home & Rent</h2>
@@ -92,7 +132,24 @@ export default async function TenantDashboardPage() {
                   </p>
                 </div>
                 
-                <div className="w-full sm:w-auto mt-4 sm:mt-0">
+                {/* ACTION BUTTONS */}
+                <div className="w-full sm:w-auto mt-4 sm:mt-0 flex flex-col sm:flex-row items-center gap-3">
+                  
+                  {/* Status Badges or Move-Out Button */}
+                  {lease.status === "active" ? (
+                    <MoveOutButton leaseId={lease.id} />
+                  ) : lease.status === "move_out_pending" ? (
+                    <span className="px-4 py-2 bg-amber-50 text-amber-700 border border-amber-200 rounded-lg text-sm font-bold flex items-center gap-2">
+                      <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                      Move-Out Pending
+                    </span>
+                  ) : lease.status === "eviction_notice" ? (
+                    <span className="px-4 py-2 bg-rose-50 text-rose-700 border border-rose-200 rounded-lg text-sm font-bold flex items-center gap-2">
+                      ⚠️ Eviction Notice
+                    </span>
+                  ) : null}
+
+                  {/* Payment Button - Rent is still due during the notice period! */}
                   <MpesaPaymentButton 
                     leaseId={lease.id} 
                     amount={lease.rentAmount} 
