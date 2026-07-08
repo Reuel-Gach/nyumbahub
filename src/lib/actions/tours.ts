@@ -25,9 +25,50 @@ export async function submitTourRequest(formData: FormData) {
 
     const tourDate = new Date(tourDateString);
 
+    // WE MUST IDENTIFY THE TENANT AND SAVE THEIR ID
+    let tenantId = null;
+    const clerkUser = await currentUser();
+
+    if (clerkUser) {
+      // 1. Try to find the tenant by their Clerk ID
+      const [existingUser] = await db
+        .select()
+        .from(users)
+        .where(eq(users.clerkId, clerkUser.id));
+      
+      if (existingUser) {
+        tenantId = existingUser.id;
+      }
+    }
+
+    // 2. Fallback: If they aren't logged in, or their DB account doesn't exist yet, 
+    // let's match them by the email they typed in the form
+    if (!tenantId) {
+      const [existingByEmail] = await db
+        .select()
+        .from(users)
+        .where(eq(users.email, tenantEmail));
+
+      if (existingByEmail) {
+        tenantId = existingByEmail.id;
+      } else {
+        // Create a basic tenant profile for them so their dashboard works later
+        const [newUser] = await db.insert(users).values({
+          clerkId: clerkUser ? clerkUser.id : `pending_${Date.now()}`,
+          email: tenantEmail,
+          fullName: tenantName,
+          role: "tenant",
+        }).returning();
+        
+        tenantId = newUser.id;
+      }
+    }
+
+    // Insert the tour WITH the tenantId
     await db.insert(tourRequests).values({
       propertyId,
       landlordId,
+      tenantId, 
       tenantName,
       tenantEmail,
       tenantPhone,
@@ -37,6 +78,7 @@ export async function submitTourRequest(formData: FormData) {
     });
 
     revalidatePath("/mgmt/dashboard");
+    revalidatePath("/dashboard"); // Ensure tenant dashboard updates
     revalidatePath("/");
     
     return { success: true };
@@ -63,7 +105,7 @@ export async function getLandlordTours() {
     const data = await db
       .select({
         id: tourRequests.id,
-        propertyId: tourRequests.propertyId, // FIXED: Now we are actually fetching the ID!
+        propertyId: tourRequests.propertyId, 
         tenantName: tourRequests.tenantName,
         tenantEmail: tourRequests.tenantEmail,
         tenantPhone: tourRequests.tenantPhone,
@@ -71,7 +113,8 @@ export async function getLandlordTours() {
         message: tourRequests.message,
         status: tourRequests.status,
         propertyTitle: properties.title,
-        pricePerMonth: properties.pricePerMonth, // FIXED: Fetching the default rent for the Move In form!
+        pricePerMonth: properties.pricePerMonth, 
+        category: properties.category, // 🔥 NEW: Fetches the category for dynamic lease periods!
       })
       .from(tourRequests)
       .leftJoin(properties, eq(tourRequests.propertyId, properties.id))
@@ -93,7 +136,8 @@ export async function updateTourStatus(tourId: string, newStatus: "approved" | "
       .where(eq(tourRequests.id, tourId));
 
     revalidatePath("/mgmt/dashboard");
-    revalidatePath("/mgmt/tours"); // FIXED: Ensures the tours page updates instantly
+    revalidatePath("/mgmt/tours"); 
+    revalidatePath("/dashboard"); // Also refresh the tenant's view
   } catch (error) {
     console.error("Failed to update tour status:", error);
     throw new Error("Failed to update status");

@@ -36,7 +36,7 @@ export const PROPERTY_TYPES: PropertySubType[] = [
   {
     id: "res_bungalow",
     name: "Bungalow",
-    parent_category": "Residential",
+    parent_category: "Residential",
     description: "A single-story, freestanding house, often set within its own private compound."
   },
   {
@@ -67,7 +67,7 @@ export const PROPERTY_TYPES: PropertySubType[] = [
   },
   {
     id: "com_warehouse",
-    name": "Warehouse",
+    name: "Warehouse",
     parent_category: "Commercial",
     description: "A large, open facility designed for the storage, distribution, or light manufacturing of goods."
   },
@@ -87,7 +87,7 @@ export const PROPERTY_TYPES: PropertySubType[] = [
   // LAND
   {
     id: "lnd_agricultural",
-    name": "Agricultural Land",
+    name: "Agricultural Land",
     parent_category: "Land",
     description: "Tracts of land designated and suitable for farming, cultivation, or livestock rearing."
   },

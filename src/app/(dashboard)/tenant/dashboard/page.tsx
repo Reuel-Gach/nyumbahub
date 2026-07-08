@@ -66,7 +66,6 @@ export default async function TenantDashboardPage() {
     .where(eq(tourRequests.tenantId, dbUser.id))
     .orderBy(desc(tourRequests.createdAt));
 
-  // 🔥 Fetching the termination reason, move-out date, and tracking the early termination offer
   const myLeases = await db
     .select({
       id: leases.id,
@@ -114,16 +113,16 @@ export default async function TenantDashboardPage() {
                 
                 {/* Top Row: Details & Buttons */}
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                  <div>
-                    <h3 className="font-bold text-slate-800 text-xl">{lease.propertyTitle}</h3>
+                  {/* 🔥 LINK WRAPPER ADDED HERE */}
+                  <Link href={`/mgmt/leases/${lease.id}`} className="block group flex-grow">
+                    <h3 className="font-bold text-slate-800 text-xl group-hover:text-blue-600 transition-colors">{lease.propertyTitle}</h3>
                     <p className="text-sm text-slate-500 mt-1">📍 {lease.propertyLocation}</p>
                     <p className="mt-2 text-sm font-medium text-slate-600">
                       Monthly Rent: <span className="font-bold text-slate-900">Ksh {lease.rentAmount.toLocaleString()}</span>
                     </p>
-                  </div>
+                  </Link>
                   
                   <div className="w-full sm:w-auto mt-4 sm:mt-0 flex flex-col sm:flex-row items-center gap-3">
-                    {/* 🔥 UPDATED: Handshake Status Badge */}
                     {lease.status === "active" ? (
                       <MoveOutButton leaseId={lease.id} />
                     ) : lease.status === "early_termination_offered" ? (
@@ -148,12 +147,10 @@ export default async function TenantDashboardPage() {
                   </div>
                 </div>
 
-                {/* 🔥 NEW: The Early Termination Offer Banner (The Handshake UI) */}
                 {lease.status === "early_termination_offered" && (
                   <EarlyTerminationResponse leaseId={lease.id} />
                 )}
 
-                {/* Legal Warning Banners */}
                 {lease.status === "eviction_notice" && (
                   <div className="mt-5 p-4 bg-rose-50 border border-rose-200 rounded-xl text-rose-800 w-full">
                     <div className="flex items-start gap-3">
@@ -167,20 +164,18 @@ export default async function TenantDashboardPage() {
                             <strong>Move-out Deadline:</strong> {lease.moveOutDate ? new Date(lease.moveOutDate).toLocaleDateString('en-GB', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) : "Pending"}
                           </p>
                         </div>
-                        <p className="text-xs mt-3 opacity-80">Please ensure all rent is cleared and the property is vacated by the deadline. Contact your landlord directly if you wish to dispute this notice.</p>
                       </div>
                     </div>
                   </div>
                 )}
 
-                {/* Friendly banner for their own 30-day move-out requests */}
                 {lease.status === "move_out_pending" && lease.moveOutDate && (
                   <div className="mt-5 p-4 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 w-full">
                     <div className="flex items-center gap-3">
                       <span className="text-xl">📅</span>
                       <div>
                         <h4 className="font-bold text-sm">Move-Out Scheduled</h4>
-                        <p className="text-sm mt-0.5">Your tenancy is scheduled to end on <strong>{new Date(lease.moveOutDate).toLocaleDateString('en-GB')}</strong>. Please ensure the property is clean for deposit processing.</p>
+                        <p className="text-sm mt-0.5">Your tenancy is scheduled to end on <strong>{new Date(lease.moveOutDate).toLocaleDateString('en-GB')}</strong>.</p>
                       </div>
                     </div>
                   </div>

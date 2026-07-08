@@ -23,12 +23,16 @@ export async function moveTenantIn(formData: FormData) {
     const propertyId = formData.get("propertyId") as string;
     const tenantName = formData.get("tenantName") as string;
     const tenantEmail = formData.get("tenantEmail") as string;
+    
+    // 🔥 Extracting the new custom fields
     const rentAmountStr = formData.get("rentAmount") as string;
+    const leaseDuration = formData.get("leaseDuration") as string;
     const startDateString = formData.get("startDate") as string;
     
     if (!tourId || tourId.trim() === "") throw new Error("Missing Tour ID");
     if (!propertyId || propertyId.trim() === "") throw new Error("Missing Property ID");
 
+    // Converts the string to a number (defaults to 0 if something goes wrong)
     const rentAmount = parseInt(rentAmountStr) || 0;
     const startDate = startDateString ? new Date(startDateString) : new Date();
 
@@ -47,12 +51,14 @@ export async function moveTenantIn(formData: FormData) {
       tenantId = insertedTenant[0].id;
     }
 
+    // 🔥 Inserting the Lease with Custom Kenyan Durations and Agreed Rent
     await db.insert(leases).values({
       propertyId,
       tenantId,
       landlordId: landlord.id,
-      rentAmount,
+      rentAmount, // Uses the negotiated rent
       billingCycle: "monthly",
+      leaseDuration, // Saves "5 Years 1 Month" etc.
       startDate,
       status: "active"
     });

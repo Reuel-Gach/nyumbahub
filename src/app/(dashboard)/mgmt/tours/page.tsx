@@ -2,7 +2,7 @@ import React from "react";
 import Link from "next/link";
 import { getLandlordTours } from "@/lib/actions/tours";
 import TourActionButtons from "@/components/TourActionButtons";
-import TourChatButton from "@/components/TourChatButton"; // NEW IMPORTS
+import TourChatButton from "@/components/TourChatButton"; 
 import { currentUser } from "@clerk/nextjs/server";
 import { db } from "@/db";
 import { users } from "@/db/schema/users";
@@ -71,9 +71,10 @@ export default async function ToursPage() {
                     tenantName={tour.tenantName}
                     tenantEmail={tour.tenantEmail}
                     rentAmount={tour.pricePerMonth || 0}
+                    category={tour.category || "Residential"} // 🔥 NEW: Passing the category!
                   />
 
-                  {/* NEW: The Chat Button */}
+                  {/* The Chat Button */}
                   <TourChatButton 
                     tour={tour} 
                     currentUserId={currentUserId} 

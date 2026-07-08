@@ -1,14 +1,13 @@
 import React from "react";
 import Link from "next/link";
 import { currentUser } from "@clerk/nextjs/server";
-import { eq, and, inArray } from "drizzle-orm"; // <-- Added 'and' & 'inArray'
+import { eq, and, inArray } from "drizzle-orm";
 
-// FIXED: Corrected import syntax and kept your relative paths
 import EvictionModal from "../../../../components/EvictionModal";
 import { db } from "../../../../db"; 
 import { users } from "../../../../db/schema/users";
-import { leases } from "../../../../db/schema/leases"; // <-- NEW IMPORT
-import { properties } from "../../../../db/schema/properties"; // <-- NEW IMPORT
+import { leases } from "../../../../db/schema/leases"; 
+import { properties } from "../../../../db/schema/properties"; 
 import { getLandlordProperties } from "../../../../lib/actions/properties";
 import { getTenantDashboardData } from "../../../../lib/actions/tenant"; 
 import PropertyActions from "../../../../components/PropertyActions";
@@ -33,7 +32,7 @@ export default async function DashboardPage() {
       clerkId: clerkUser.id,
       email: email,
       fullName: fullName,
-      role: "tenant" // Everyone starts as a tenant!
+      role: "tenant"
     }).returning();
     
     dbUser = newlyInserted[0];
@@ -58,7 +57,6 @@ export default async function DashboardPage() {
   // 5. LANDLORD VIEW 
   // ==========================================
   
-  // NEW: Fetch all active/pending leases (Tenants) for this landlord
   const activeTenants = await db
     .select({
       id: leases.id,
@@ -126,7 +124,7 @@ export default async function DashboardPage() {
         </div>
       </div>
 
-      {/* NEW: Tenant & Lease Management Section */}
+      {/* Tenant & Lease Management Section */}
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden mb-8">
         <div className="bg-rose-50 border-b border-rose-100 px-6 py-4 flex items-center justify-between">
           <h2 className="text-lg font-bold text-rose-900">👥 Active Tenants & Leases</h2>
@@ -137,15 +135,16 @@ export default async function DashboardPage() {
             {activeTenants.map((lease) => (
               <div key={lease.id} className="p-6 flex flex-col md:flex-row items-center justify-between gap-4 hover:bg-slate-50 transition-colors">
                 
-                <div className="flex-grow">
-                  <h3 className="text-lg font-bold text-slate-800">
+                {/* Wrapped Tenant/Property info in Link to Detailed Lease Page */}
+                <Link href={`/mgmt/leases/${lease.id}`} className="flex-grow group">
+                  <h3 className="text-lg font-bold text-slate-800 group-hover:text-blue-600 transition-colors">
                     {lease.tenantName || "Unknown Tenant"}
                   </h3>
                   <p className="text-sm text-slate-500 mt-1">🏠 {lease.propertyTitle}</p>
                   <p className="text-sm font-medium text-slate-600 mt-1">
                     Rent: Ksh {lease.rentAmount.toLocaleString()} / mo
                   </p>
-                </div>
+                </Link>
                 
                 <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto">
                   {/* Status Indicator */}
