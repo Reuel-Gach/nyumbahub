@@ -21,12 +21,10 @@ export default function MpesaPaymentButton({ leaseId, amount, propertyTitle }: M
     setIsMounted(true);
   }, []);
 
-  const handleOpenClick = (e: React.MouseEvent) => {
-    e.preventDefault(); // Stop any parent links from triggering
-    console.log("M-Pesa button clicked! Opening modal...");
-    // 2. THE ACID TEST: If you don't see this alert, something is visually covering the button.
-    alert("Button is alive! Opening the payment modal."); 
+  const handleOpenClick = () => {
     setIsOpen(true);
+    setMessage("");
+    setError("");
   };
 
   const handlePayment = async (e: React.FormEvent) => {
