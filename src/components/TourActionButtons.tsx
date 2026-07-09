@@ -12,6 +12,7 @@ interface TourActionProps {
   tenantName: string;
   tenantEmail: string;
   rentAmount?: number;
+  category?: string;
 }
 
 export default function TourActionButtons({ 
@@ -20,7 +21,8 @@ export default function TourActionButtons({
   propertyId, 
   tenantName, 
   tenantEmail, 
-  rentAmount 
+  rentAmount,
+  category,
 }: TourActionProps) {
   const [isLoading, setIsLoading] = useState(false);
 
@@ -58,6 +60,7 @@ export default function TourActionButtons({
           tenantName={tenantName}
           tenantEmail={tenantEmail}
           defaultRent={rentAmount || 0}
+          category={category}
         />
       </div>
     );
