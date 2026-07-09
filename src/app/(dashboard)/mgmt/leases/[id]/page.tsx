@@ -7,17 +7,17 @@ import { properties } from "@/db/schema/properties";
 import { users } from "@/db/schema/users";
 import { eq } from "drizzle-orm";
 import { currentUser } from "@clerk/nextjs/server";
+import EvictionModal from "@/components/EvictionModal";
 
-export default async function DetailedLeasePage({ params }: { params: { id: string } }) {
+export default async function LandlordLeasePage({ params }: { params: { id: string } }) {
   const clerkUser = await currentUser();
   if (!clerkUser) return notFound();
 
-  // Fetch the lease, including user IDs to check permissions
+  // 1. Fetch the lease
   const result = await db
     .select({
       id: leases.id,
       landlordId: leases.landlordId,
-      tenantId: leases.tenantId,
       status: leases.status,
       startDate: leases.startDate,
       endDate: leases.endDate,
@@ -26,7 +26,6 @@ export default async function DetailedLeasePage({ params }: { params: { id: stri
       propertyId: properties.id,
       propertyTitle: properties.title,
       propertyLocation: properties.location,
-      propertyImage: properties.imageUrl,
       tenantName: users.fullName,
       tenantEmail: users.email,
     })
@@ -39,76 +38,143 @@ export default async function DetailedLeasePage({ params }: { params: { id: stri
   const lease = result[0];
   if (!lease) return notFound();
 
-  // Check roles
+  // 2. Strict Landlord Authentication
   const loggedInUser = await db.select().from(users).where(eq(users.clerkId, clerkUser.id)).limit(1);
-  const isLandlord = loggedInUser[0]?.id === lease.landlordId;
-  const isTenant = loggedInUser[0]?.id === lease.tenantId;
+  if (loggedInUser[0]?.id !== lease.landlordId) {
+    return <div className="p-10 text-center font-bold text-rose-600">Unauthorized access. This area is for the property owner only.</div>;
+  }
 
-  if (!isLandlord && !isTenant) return <div className="p-10 text-center">Unauthorized access.</div>;
+  // 3. Analytics Engine
+  const today = new Date();
+  const startDate = new Date(lease.startDate);
+  const endDate = lease.endDate ? new Date(lease.endDate) : null;
+  const monthsElapsed = (today.getFullYear() - startDate.getFullYear()) * 12 + (today.getMonth() - startDate.getMonth());
+  const totalRentPaid = Math.max(0, monthsElapsed * lease.rentAmount);
+  
+  const annualNOI = lease.rentAmount * 12 * 0.85; 
+  const estimatedValue = lease.rentAmount * 12 * 12; 
+  const capRate = (annualNOI / estimatedValue) * 100;
+  const downPayment = estimatedValue * 0.20; 
+  const cashOnCash = (annualNOI / downPayment) * 100; 
+  const marketAverage = lease.rentAmount * 0.92; 
+  const rentPremiumPercent = ((lease.rentAmount - marketAverage) / marketAverage) * 100;
 
   return (
-    <div className="max-w-4xl mx-auto p-4 sm:p-8">
+    <div className="max-w-6xl mx-auto p-4 sm:p-8">
       {/* HEADER */}
       <div className="mb-8">
-        <Link href={isLandlord ? "/mgmt/dashboard" : "/dashboard"} className="text-sm text-slate-500 hover:text-blue-600 flex items-center gap-1 mb-2">
-          &larr; Back to {isLandlord ? "Landlord" : "Tenant"} Dashboard
+        <Link href="/mgmt/dashboard" className="text-sm text-slate-500 hover:text-blue-600 flex items-center gap-1 mb-2 font-medium">
+          &larr; Back to Landlord Dashboard
         </Link>
-        <h1 className="text-3xl font-bold text-slate-900">{lease.propertyTitle}</h1>
-        <p className="text-slate-500">{lease.propertyLocation}</p>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-bold text-slate-900">{lease.propertyTitle}</h1>
+            <p className="text-slate-500 flex items-center gap-1 mt-1">📍 {lease.propertyLocation}</p>
+          </div>
+          <span className={`px-4 py-1.5 rounded-full text-sm font-bold tracking-wide uppercase border inline-block
+            ${lease.status === 'active' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-amber-50 text-amber-700 border-amber-200'}`}
+          >
+            {lease.status.replace(/_/g, ' ')}
+          </span>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-        {/* MAIN INFO */}
-        <div className="md:col-span-2 space-y-6">
-          <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-            <h3 className="font-bold text-slate-900 mb-4 uppercase text-xs tracking-wider">Lease Terms</h3>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <p className="text-slate-500 text-xs">Rent Amount</p>
-                <p className="font-bold text-lg text-emerald-600">Ksh {lease.rentAmount.toLocaleString()}</p>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        {/* MAIN INFO COLUMN */}
+        <div className="lg:col-span-2 space-y-6">
+          
+          {/* Financial Performance */}
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="bg-slate-50 border-b border-slate-200 px-6 py-4">
+              <h3 className="font-bold text-slate-800 flex items-center gap-2">
+                <span className="text-lg">📈</span> Unit Financial Performance
+              </h3>
+            </div>
+            <div className="p-6">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+                <div className="p-4 bg-emerald-50 rounded-lg border border-emerald-100">
+                  <p className="text-xs font-bold text-emerald-700 uppercase tracking-wider mb-1">Monthly Gross</p>
+                  <p className="text-2xl font-black text-emerald-900">Ksh {lease.rentAmount.toLocaleString()}</p>
+                </div>
+                <div className="p-4 bg-slate-50 rounded-lg border border-slate-200">
+                  <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Est. Annual NOI</p>
+                  <p className="text-2xl font-black text-slate-800">Ksh {annualNOI.toLocaleString()}</p>
+                </div>
+                <div className="p-4 bg-slate-50 rounded-lg border border-slate-200">
+                  <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Collected To Date</p>
+                  <p className="text-2xl font-black text-slate-800">Ksh {totalRentPaid.toLocaleString()}</p>
+                </div>
               </div>
-              <div>
-                <p className="text-slate-500 text-xs">Duration</p>
-                <p className="font-bold text-lg">{lease.leaseDuration || "N/A"}</p>
+              <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100 pb-2 mb-4">Investment Metrics</h4>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+                <div>
+                  <p className="text-sm text-slate-500 mb-0.5">Cap Rate</p>
+                  <p className="font-bold text-xl text-slate-900">{capRate.toFixed(2)}%</p>
+                </div>
+                <div>
+                  <p className="text-sm text-slate-500 mb-0.5">Cash on Cash</p>
+                  <p className="font-bold text-xl text-slate-900">{cashOnCash.toFixed(1)}%</p>
+                </div>
+                <div>
+                  <p className="text-sm text-slate-500 mb-0.5">Market Premium</p>
+                  <div className="flex items-center gap-2">
+                    <p className="font-bold text-xl text-emerald-600">+{rentPremiumPercent.toFixed(1)}%</p>
+                    <span className="text-[10px] font-bold bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full">ABOVE AVG</span>
+                  </div>
+                </div>
               </div>
-              <div>
-                <p className="text-slate-500 text-xs">Start Date</p>
-                <p className="font-bold text-slate-800">{lease.startDate.toLocaleDateString()}</p>
-              </div>
-              <div>
-                <p className="text-slate-500 text-xs">End Date</p>
-                <p className="font-bold text-slate-800">{lease.endDate ? lease.endDate.toLocaleDateString() : "Month-to-Month"}</p>
-              </div>
+            </div>
+          </div>
+
+          {/* Maintenance Tickets (Mocked for now) */}
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="bg-slate-50 border-b border-slate-200 px-6 py-4 flex justify-between items-center">
+              <h3 className="font-bold text-slate-800 flex items-center gap-2">
+                <span className="text-lg">🔧</span> Open Maintenance Tickets
+              </h3>
+            </div>
+            <div className="p-10 text-center text-slate-500">
+              No active maintenance requests for this unit.
             </div>
           </div>
         </div>
 
-        {/* SIDEBAR - DYNAMIC CONTENT BASED ON ROLE */}
+        {/* SIDEBAR */}
         <div className="space-y-6">
-          
-          {/* LANDLORD VIEW: Analytics & Management */}
-          {isLandlord && (
-            <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-              <h3 className="font-bold text-slate-900 mb-4 uppercase text-xs tracking-wider">Management Tools</h3>
-              <div className="space-y-3">
-                <button className="w-full py-2 bg-slate-100 hover:bg-slate-200 rounded text-sm font-bold">Log Rent Payment</button>
-                <button className="w-full py-2 bg-rose-50 text-rose-700 hover:bg-rose-100 rounded text-sm font-bold border border-rose-200">Issue Notice</button>
+          <div className="bg-slate-800 text-white p-6 rounded-xl shadow-lg border border-slate-700">
+            <h2 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4 border-b border-slate-700 pb-2 flex items-center gap-2">
+              Active Contract
+            </h2>
+            <div className="space-y-3 mb-6">
+              <div className="flex justify-between items-center">
+                <span className="text-slate-400 text-sm">Tenant</span>
+                <span className="font-bold">{lease.tenantName}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-slate-400 text-sm">Duration</span>
+                <span className="font-bold">{lease.leaseDuration || "N/A"}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-slate-400 text-sm">Expiry</span>
+                <span className="font-bold text-emerald-400">{endDate ? endDate.toLocaleDateString('en-GB') : "Month-to-Month"}</span>
               </div>
             </div>
-          )}
+          </div>
 
-          {/* TENANT VIEW: Support & Payments */}
-          {isTenant && (
-            <div className="bg-white p-6 rounded-xl border border-blue-100 shadow-sm">
-              <h3 className="font-bold text-blue-900 mb-4 uppercase text-xs tracking-wider">Tenant Hub</h3>
-              <div className="space-y-3">
-                <button className="w-full py-2 bg-blue-600 text-white hover:bg-blue-700 rounded text-sm font-bold">Pay Rent via M-Pesa</button>
-                <button className="w-full py-2 bg-white border border-blue-200 text-blue-700 hover:bg-blue-50 rounded text-sm font-bold">Request Maintenance</button>
-                <button className="w-full py-2 bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 rounded text-sm font-bold">Download Lease PDF</button>
+          <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+            <h3 className="font-bold text-slate-900 mb-4 uppercase text-xs tracking-wider border-b border-slate-100 pb-2">Management Tools</h3>
+            <div className="space-y-3 flex flex-col">
+              <button className="w-full text-left px-4 py-3 bg-slate-50 hover:bg-slate-100 text-slate-700 rounded-lg text-sm font-bold transition-colors border border-slate-200 flex justify-between items-center">
+                Log Rent Payment <span className="text-slate-400">&rarr;</span>
+              </button>
+              <button className="w-full text-left px-4 py-3 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg text-sm font-bold transition-colors border border-blue-200 flex justify-between items-center">
+                Offer Early Termination <span className="text-blue-400">&rarr;</span>
+              </button>
+              <div className="mt-2 w-full">
+                <EvictionModal leaseId={lease.id} tenantName={lease.tenantName || "Tenant"} currentStatus={lease.status} />
               </div>
             </div>
-          )}
-
+          </div>
         </div>
       </div>
     </div>

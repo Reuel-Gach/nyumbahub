@@ -8,9 +8,6 @@ import { properties } from "@/db/schema/properties";
 import { leases } from "@/db/schema/leases";
 import { eq, desc, and, or, inArray } from "drizzle-orm";
 import TourChatButton from "@/components/TourChatButton";
-import MpesaPaymentButton from "@/components/MpesaPaymentButton";
-import MoveOutButton from "@/components/MoveOutButton";
-import EarlyTerminationResponse from "@/components/EarlyTerminationResponse";
 
 export const dynamic = 'force-dynamic';
 
@@ -111,11 +108,17 @@ export default async function TenantDashboardPage() {
             {myLeases.map((lease) => (
               <div key={lease.id} className="p-6 hover:bg-slate-50 transition-colors">
                 
-                {/* Top Row: Details & Buttons */}
+                {/* Top Row: Details & Status */}
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                  {/* 🔥 LINK WRAPPER ADDED HERE */}
-                  <Link href={`/mgmt/leases/${lease.id}`} className="block group flex-grow">
-                    <h3 className="font-bold text-slate-800 text-xl group-hover:text-blue-600 transition-colors">{lease.propertyTitle}</h3>
+                  
+                  {/* 🔥 UPDATED LINK WRAPPER */}
+                  <Link href={`/tenant/leases/${lease.id}`} className="block group flex-grow">
+                    <h3 className="font-bold text-slate-800 text-xl group-hover:text-blue-600 transition-colors flex items-center gap-2">
+                      {lease.propertyTitle}
+                      <span className="text-xs font-bold bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity">
+                        Manage & Pay &rarr;
+                      </span>
+                    </h3>
                     <p className="text-sm text-slate-500 mt-1">📍 {lease.propertyLocation}</p>
                     <p className="mt-2 text-sm font-medium text-slate-600">
                       Monthly Rent: <span className="font-bold text-slate-900">Ksh {lease.rentAmount.toLocaleString()}</span>
@@ -123,8 +126,11 @@ export default async function TenantDashboardPage() {
                   </Link>
                   
                   <div className="w-full sm:w-auto mt-4 sm:mt-0 flex flex-col sm:flex-row items-center gap-3">
+                    {/* Visual Status Indicators ONLY */}
                     {lease.status === "active" ? (
-                      <MoveOutButton leaseId={lease.id} />
+                      <span className="px-4 py-2 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg text-sm font-bold flex items-center gap-2">
+                        Active Tenancy
+                      </span>
                     ) : lease.status === "early_termination_offered" ? (
                       <span className="px-4 py-2 bg-blue-50 text-blue-700 border border-blue-200 rounded-lg text-sm font-bold flex items-center gap-2">
                         Offer Pending
@@ -138,19 +144,10 @@ export default async function TenantDashboardPage() {
                         ⚠️ Notice to Vacate
                       </span>
                     ) : null}
-
-                    <MpesaPaymentButton 
-                      leaseId={lease.id} 
-                      amount={lease.rentAmount} 
-                      propertyTitle={lease.propertyTitle} 
-                    />
                   </div>
                 </div>
 
-                {lease.status === "early_termination_offered" && (
-                  <EarlyTerminationResponse leaseId={lease.id} />
-                )}
-
+                {/* Legal / Warning Banners (Read-only on this page) */}
                 {lease.status === "eviction_notice" && (
                   <div className="mt-5 p-4 bg-rose-50 border border-rose-200 rounded-xl text-rose-800 w-full">
                     <div className="flex items-start gap-3">
