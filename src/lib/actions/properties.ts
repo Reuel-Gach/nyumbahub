@@ -8,13 +8,13 @@ import { revalidatePath } from "next/cache";
 import { desc, eq, and, ilike, lte, or } from "drizzle-orm";
 
 // --- 1. READ ACTION (For the Homepage with Search) ---
-export async function getAvailableProperties(filters?: { query?: string; maxPrice?: number }) {
+export async function getAvailableProperties(filters?: { query?: string; maxPrice?: number; category?: string }) {
   try {
     const baseCondition = eq(properties.isAvailable, true);
     let finalConditions = baseCondition;
 
     if (filters) {
-      const { query, maxPrice } = filters;
+      const { query, maxPrice, category } = filters;
       const queryConditions = [];
 
       if (query) {
@@ -28,6 +28,10 @@ export async function getAvailableProperties(filters?: { query?: string; maxPric
 
       if (maxPrice) {
         queryConditions.push(lte(properties.pricePerMonth, maxPrice));
+      }
+
+      if (category) {
+        queryConditions.push(eq(properties.category, category));
       }
 
       if (queryConditions.length > 0) {
