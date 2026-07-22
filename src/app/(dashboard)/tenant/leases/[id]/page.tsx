@@ -5,13 +5,15 @@ import { db } from "@/db";
 import { leases } from "@/db/schema/leases";
 import { properties } from "@/db/schema/properties";
 import { users } from "@/db/schema/users";
-import { eq } from "drizzle-orm";
+import { maintenanceTickets } from "@/db/schema/maintenance_tickets"; // 🔥 Imported schema
+import { eq, and, desc } from "drizzle-orm"; // 🔥 Added and, desc
 import { currentUser } from "@clerk/nextjs/server";
 
 // Tenant-Specific Action Components
 import MpesaPaymentButton from "@/components/MpesaPaymentButton";
 import MoveOutButton from "@/components/MoveOutButton";
 import EarlyTerminationResponse from "@/components/EarlyTerminationResponse";
+import MaintenanceRequestForm from "@/components/MaintenanceRequestForm";
 
 export default async function TenantLeasePage({ params }: { params: { id: string } }) {
   const clerkUser = await currentUser();
@@ -27,6 +29,7 @@ export default async function TenantLeasePage({ params }: { params: { id: string
       endDate: leases.endDate,
       leaseDuration: leases.leaseDuration,
       rentAmount: leases.rentAmount,
+      propertyId: properties.id,
       propertyTitle: properties.title,
       propertyLocation: properties.location,
     })
@@ -42,7 +45,19 @@ export default async function TenantLeasePage({ params }: { params: { id: string
     return <div className="p-10 text-center font-bold text-rose-600">Unauthorized access. This area is for the registered resident only.</div>;
   }
 
-  // 3. KPI Math Engine
+  // 🔥 3. Fetch Maintenance Ticket History
+  const tickets = await db
+    .select()
+    .from(maintenanceTickets)
+    .where(
+      and(
+        eq(maintenanceTickets.propertyId, lease.propertyId),
+        eq(maintenanceTickets.tenantId, dbUser.id)
+      )
+    )
+    .orderBy(desc(maintenanceTickets.createdAt));
+
+  // 4. KPI Math Engine
   const today = new Date();
   const startDate = new Date(lease.startDate);
   const endDate = lease.endDate ? new Date(lease.endDate) : null;
@@ -59,11 +74,7 @@ export default async function TenantLeasePage({ params }: { params: { id: string
   if (endDate) {
     const totalDays = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 3600 * 24));
     daysRemaining = Math.ceil((endDate.getTime() - today.getTime()) / (1000 * 3600 * 24));
-    
-    // Calculate percentage for progress bar
     leaseProgress = Math.max(0, Math.min(100, ((totalDays - daysRemaining) / totalDays) * 100));
-
-    // Recommend renewal 60 days before expiry
     renewalDeadline = new Date(endDate);
     renewalDeadline.setDate(renewalDeadline.getDate() - 60);
   }
@@ -117,13 +128,12 @@ export default async function TenantLeasePage({ params }: { params: { id: string
             </div>
           </div>
           
-          {/* Contract & Lease Terms (UPDATED WITH AGREEMENT METRICS) */}
+          {/* Contract & Lease Terms */}
           <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
             <h3 className="font-bold text-slate-800 mb-6 flex items-center gap-2 border-b border-slate-100 pb-3">
               <span className="text-xl">📜</span> Contract & Lease Terms
             </h3>
 
-            {/* 🔥 NEW: Explicit Agreement Status Banner */}
             <div className={`mb-6 p-4 rounded-lg border ${endDate ? 'bg-blue-50 border-blue-200' : 'bg-emerald-50 border-emerald-200'}`}>
               <div className="flex items-start gap-3">
                 <span className="text-2xl mt-0.5">{endDate ? '📝' : '🤝'}</span>
@@ -166,7 +176,6 @@ export default async function TenantLeasePage({ params }: { params: { id: string
               )}
             </div>
 
-            {/* 🔥 NEW: Visual Lease Progress & Warning */}
             {endDate && daysRemaining! > 0 && (
               <div className="mt-6 pt-6 border-t border-slate-100">
                 <div className="flex justify-between text-xs font-bold text-slate-500 mb-2">
@@ -179,17 +188,49 @@ export default async function TenantLeasePage({ params }: { params: { id: string
                     style={{ width: `${leaseProgress}%` }}
                   ></div>
                 </div>
-                
-                {/* Conditional Alert if inside the 60-day window */}
-                {daysRemaining! < 60 && (
-                  <div className="mt-3 flex items-center gap-2 text-amber-700 bg-amber-50 p-2 rounded text-xs font-bold border border-amber-200">
-                    <span>⚠️</span>
-                    <span>You are in the renewal window. Please communicate your plans to the landlord.</span>
-                  </div>
-                )}
               </div>
             )}
           </div>
+
+          {/* Maintenance Request Section */}
+          <div id="maintenance" className="scroll-mt-8 space-y-6">
+            <MaintenanceRequestForm propertyId={lease.propertyId} />
+            
+            {/* 🔥 NEW: Ticket History Display */}
+            {tickets.length > 0 && (
+              <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+                <h3 className="font-bold text-slate-800 mb-6 flex items-center gap-2 border-b border-slate-100 pb-3">
+                  <span className="text-xl">📋</span> Request History
+                </h3>
+                <div className="space-y-4">
+                  {tickets.map(ticket => (
+                    <div key={ticket.id} className="p-4 border border-slate-100 rounded-lg bg-slate-50">
+                      <div className="flex flex-col sm:flex-row justify-between sm:items-start gap-2 mb-2">
+                        <div>
+                          <h4 className="font-bold text-slate-800">{ticket.title}</h4>
+                          <p className="text-xs font-medium text-slate-500 mt-0.5">
+                            Submitted on {new Date(ticket.createdAt).toLocaleDateString('en-GB')}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {ticket.priority === 'emergency' && <span className="text-[10px] font-bold text-rose-600 uppercase tracking-wider bg-rose-100 px-2 py-0.5 rounded-full">Emergency</span>}
+                          <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider whitespace-nowrap
+                            ${ticket.status === 'resolved' ? 'bg-emerald-100 text-emerald-700' : 
+                              ticket.status === 'in_progress' ? 'bg-blue-100 text-blue-700' : 
+                              'bg-amber-100 text-amber-700'}`}
+                          >
+                            {ticket.status.replace('_', ' ')}
+                          </span>
+                        </div>
+                      </div>
+                      <p className="text-sm text-slate-600 mt-2">{ticket.description}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
         </div>
 
         {/* Quick Actions Sidebar */}
@@ -200,9 +241,13 @@ export default async function TenantLeasePage({ params }: { params: { id: string
             <div className="space-y-3">
               <MpesaPaymentButton leaseId={lease.id} amount={lease.rentAmount} propertyTitle={lease.propertyTitle} />
               {lease.status === "active" && <MoveOutButton leaseId={lease.id} />}
-              <button className="w-full py-3 bg-white border border-blue-200 text-blue-700 hover:bg-blue-50 rounded-lg text-sm font-bold transition-colors flex justify-center items-center gap-2">
-                Request Maintenance
-              </button>
+              
+              <a 
+                href="#maintenance" 
+                className="w-full py-3 bg-white border border-blue-200 text-blue-700 hover:bg-blue-50 rounded-lg text-sm font-bold transition-colors flex justify-center items-center gap-2"
+              >
+                🔧 Request Maintenance
+              </a>
             </div>
           </div>
         </div>
