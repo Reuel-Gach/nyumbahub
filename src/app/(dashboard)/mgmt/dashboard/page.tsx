@@ -3,7 +3,6 @@ import Link from "next/link";
 import { currentUser } from "@clerk/nextjs/server";
 import { eq, and, inArray } from "drizzle-orm";
 
-import EvictionModal from "../../../../components/EvictionModal";
 import { db } from "../../../../db"; 
 import { users } from "../../../../db/schema/users";
 import { leases } from "../../../../db/schema/leases"; 
@@ -133,41 +132,47 @@ export default async function DashboardPage() {
         {activeTenants.length > 0 ? (
           <div className="divide-y divide-slate-100">
             {activeTenants.map((lease) => (
-              <div key={lease.id} className="p-6 flex flex-col md:flex-row items-center justify-between gap-4 hover:bg-slate-50 transition-colors">
-                
-                {/* Wrapped Tenant/Property info in Link to Detailed Lease Page */}
-                <Link href={`/mgmt/leases/${lease.id}`} className="flex-grow group">
-                  <h3 className="text-lg font-bold text-slate-800 group-hover:text-blue-600 transition-colors">
-                    {lease.tenantName || "Unknown Tenant"}
-                  </h3>
-                  <p className="text-sm text-slate-500 mt-1">🏠 {lease.propertyTitle}</p>
-                  <p className="text-sm font-medium text-slate-600 mt-1">
-                    Rent: Ksh {lease.rentAmount.toLocaleString()} / mo
-                  </p>
-                </Link>
-                
-                <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto">
-                  {/* Status Indicator */}
-                  {lease.status === "move_out_pending" && (
-                     <span className="px-3 py-1.5 bg-amber-100 text-amber-800 rounded-lg text-xs font-bold uppercase tracking-wide">
-                       Requested Move-Out
-                     </span>
-                  )}
-                  {lease.status === "eviction_notice" && (
-                     <span className="px-3 py-1.5 bg-rose-100 text-rose-800 rounded-lg text-xs font-bold uppercase tracking-wide">
-                       Eviction Pending
-                     </span>
-                  )}
+              <Link 
+                key={lease.id} 
+                href={`/mgmt/leases/${lease.id}`} 
+                className="block p-6 hover:bg-slate-50 transition-colors group"
+              >
+                <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+                  <div className="flex-grow">
+                    <div className="flex items-center gap-3">
+                      <h3 className="text-lg font-bold text-slate-800 group-hover:text-blue-600 transition-colors">
+                        {lease.tenantName || "Unknown Tenant"}
+                      </h3>
+                      <span className="text-xs font-bold bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity">
+                        Manage Lease &rarr;
+                      </span>
+                    </div>
+                    <p className="text-sm text-slate-500 mt-1">🏠 {lease.propertyTitle}</p>
+                    <p className="text-sm font-medium text-slate-600 mt-1">
+                      Rent: Ksh {lease.rentAmount.toLocaleString()} / mo
+                    </p>
+                  </div>
                   
-                  {/* The Eviction / Finalize Modal */}
-                  <EvictionModal 
-                    leaseId={lease.id} 
-                    tenantName={lease.tenantName || "Tenant"} 
-                    currentStatus={lease.status} 
-                  />
+                  <div className="flex items-center gap-3 w-full sm:w-auto">
+                    {/* Status Indicator */}
+                    {lease.status === "active" && (
+                       <span className="px-3 py-1.5 bg-emerald-100 text-emerald-800 rounded-lg text-xs font-bold uppercase tracking-wide">
+                         Active
+                       </span>
+                    )}
+                    {lease.status === "move_out_pending" && (
+                       <span className="px-3 py-1.5 bg-amber-100 text-amber-800 rounded-lg text-xs font-bold uppercase tracking-wide">
+                         Requested Move-Out
+                       </span>
+                    )}
+                    {lease.status === "eviction_notice" && (
+                       <span className="px-3 py-1.5 bg-rose-100 text-rose-800 rounded-lg text-xs font-bold uppercase tracking-wide">
+                         Notice Issued
+                       </span>
+                    )}
+                  </div>
                 </div>
-
-              </div>
+              </Link>
             ))}
           </div>
         ) : (

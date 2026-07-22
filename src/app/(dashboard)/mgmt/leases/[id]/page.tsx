@@ -5,7 +5,7 @@ import { db } from "@/db";
 import { leases } from "@/db/schema/leases";
 import { properties } from "@/db/schema/properties";
 import { users } from "@/db/schema/users";
-import { eq } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm"; // 🔥 Added sql and and
 import { currentUser } from "@clerk/nextjs/server";
 import EvictionModal from "@/components/EvictionModal";
 
@@ -13,7 +13,7 @@ export default async function LandlordLeasePage({ params }: { params: { id: stri
   const clerkUser = await currentUser();
   if (!clerkUser) return notFound();
 
-  // 1. Fetch the lease
+  // 1. Fetch the specific lease
   const result = await db
     .select({
       id: leases.id,
@@ -28,6 +28,7 @@ export default async function LandlordLeasePage({ params }: { params: { id: stri
       propertyLocation: properties.location,
       tenantName: users.fullName,
       tenantEmail: users.email,
+      // 🔥 In the future, add: purchasePrice: properties.purchasePrice
     })
     .from(leases)
     .innerJoin(properties, eq(leases.propertyId, properties.id))
@@ -44,20 +45,42 @@ export default async function LandlordLeasePage({ params }: { params: { id: stri
     return <div className="p-10 text-center font-bold text-rose-600">Unauthorized access. This area is for the property owner only.</div>;
   }
 
-  // 3. Analytics Engine
+  // ==========================================
+  // 🔥 PRODUCTION ANALYTICS ENGINE
+  // ==========================================
+  
   const today = new Date();
   const startDate = new Date(lease.startDate);
   const endDate = lease.endDate ? new Date(lease.endDate) : null;
   const monthsElapsed = (today.getFullYear() - startDate.getFullYear()) * 12 + (today.getMonth() - startDate.getMonth());
   const totalRentPaid = Math.max(0, monthsElapsed * lease.rentAmount);
   
+  // 3A. Dynamic Market Average (Querying your DB for comps in the same location)
+  const marketData = await db
+    .select({ 
+      avgRent: sql<number>`CAST(AVG(${properties.pricePerMonth}) AS INT)` 
+    })
+    .from(properties)
+    .where(eq(properties.location, lease.propertyLocation));
+  
+  // Use the DB average, fallback to the lease rent if it's the only property in that location
+  const localMarketAverage = marketData[0]?.avgRent || lease.rentAmount; 
+  const rentPremiumPercent = localMarketAverage > 0 
+    ? ((lease.rentAmount - localMarketAverage) / localMarketAverage) * 100 
+    : 0;
+
+  // 3B. Valuation & Return Metrics
+  // TODO: Replace with lease.purchasePrice once added to the database schema
+  const estimatedValue = lease.rentAmount * 12 * 12; // Temporary 12x GRM fallback
+  
+  // TODO: Replace 0.85 (15% OpEx) by summing up actual maintenance costs from a future Expenses table
   const annualNOI = lease.rentAmount * 12 * 0.85; 
-  const estimatedValue = lease.rentAmount * 12 * 12; 
-  const capRate = (annualNOI / estimatedValue) * 100;
+  
+  const capRate = estimatedValue > 0 ? (annualNOI / estimatedValue) * 100 : 0;
+  
+  // TODO: Replace with actual mortgage down payment data from the DB
   const downPayment = estimatedValue * 0.20; 
-  const cashOnCash = (annualNOI / downPayment) * 100; 
-  const marketAverage = lease.rentAmount * 0.92; 
-  const rentPremiumPercent = ((lease.rentAmount - marketAverage) / marketAverage) * 100;
+  const cashOnCash = downPayment > 0 ? (annualNOI / downPayment) * 100 : 0; 
 
   return (
     <div className="max-w-6xl mx-auto p-4 sm:p-8">
@@ -118,9 +141,16 @@ export default async function LandlordLeasePage({ params }: { params: { id: stri
                 <div>
                   <p className="text-sm text-slate-500 mb-0.5">Market Premium</p>
                   <div className="flex items-center gap-2">
-                    <p className="font-bold text-xl text-emerald-600">+{rentPremiumPercent.toFixed(1)}%</p>
-                    <span className="text-[10px] font-bold bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full">ABOVE AVG</span>
+                    <p className={`font-bold text-xl ${rentPremiumPercent >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                      {rentPremiumPercent > 0 ? '+' : ''}{rentPremiumPercent.toFixed(1)}%
+                    </p>
+                    {rentPremiumPercent >= 0 ? (
+                      <span className="text-[10px] font-bold bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full">ABOVE AVG</span>
+                    ) : (
+                      <span className="text-[10px] font-bold bg-rose-100 text-rose-700 px-2 py-0.5 rounded-full">BELOW AVG</span>
+                    )}
                   </div>
+                  <p className="text-xs text-slate-400 mt-1">Area Avg: Ksh {localMarketAverage.toLocaleString()}</p>
                 </div>
               </div>
             </div>
