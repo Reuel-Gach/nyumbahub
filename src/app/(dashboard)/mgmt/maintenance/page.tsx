@@ -11,19 +11,6 @@ import Link from "next/link";
 
 export const dynamic = 'force-dynamic';
 
-// Explicitly define the ticket type to satisfy TypeScript
-type TicketItem = {
-  id: string;
-  title: string;
-  description: string;
-  status: string;
-  priority: string;
-  createdAt: Date;
-  propertyTitle: string;
-  tenantName: string | null;
-  leaseId: string;
-};
-
 export default async function LandlordMaintenanceHub() {
   const clerkUser = await currentUser();
   if (!clerkUser) return null;
@@ -51,10 +38,13 @@ export default async function LandlordMaintenanceHub() {
     .where(eq(leases.landlordId, dbUser.id))
     .orderBy(desc(maintenanceTickets.createdAt));
 
-  // Remove duplicates and explicitly cast as TicketItem[]
-  const uniqueTickets: TicketItem[] = Array.from(
-    new Map(allTickets.map(item => [item.id, item])).values()
-  );
+  // 🔥 Type-safe deduplication using a lookup object instead of Map
+  const seenIds = new Set<string>();
+  const uniqueTickets = allTickets.filter(ticket => {
+    if (seenIds.has(ticket.id)) return false;
+    seenIds.add(ticket.id);
+    return true;
+  });
 
   const openCount = uniqueTickets.filter(t => t.status === 'open').length;
   const inProgressCount = uniqueTickets.filter(t => t.status === 'in_progress').length;
