@@ -11,6 +11,19 @@ import Link from "next/link";
 
 export const dynamic = 'force-dynamic';
 
+// Explicitly define the ticket type to satisfy TypeScript
+type TicketItem = {
+  id: string;
+  title: string;
+  description: string;
+  status: string;
+  priority: string;
+  createdAt: Date;
+  propertyTitle: string;
+  tenantName: string | null;
+  leaseId: string;
+};
+
 export default async function LandlordMaintenanceHub() {
   const clerkUser = await currentUser();
   if (!clerkUser) return null;
@@ -34,12 +47,14 @@ export default async function LandlordMaintenanceHub() {
     .from(maintenanceTickets)
     .innerJoin(properties, eq(maintenanceTickets.propertyId, properties.id))
     .innerJoin(users, eq(maintenanceTickets.tenantId, users.id))
-    .innerJoin(leases, eq(properties.id, leases.propertyId)) // Join to verify ownership via lease
+    .innerJoin(leases, eq(properties.id, leases.propertyId))
     .where(eq(leases.landlordId, dbUser.id))
     .orderBy(desc(maintenanceTickets.createdAt));
 
-  // Remove duplicates in case a property has multiple historical leases
-  const uniqueTickets = Array.from(new Map(allTickets.map(item => [item.id, item])).values());
+  // Remove duplicates and explicitly cast as TicketItem[]
+  const uniqueTickets: TicketItem[] = Array.from(
+    new Map(allTickets.map(item => [item.id, item])).values()
+  );
 
   const openCount = uniqueTickets.filter(t => t.status === 'open').length;
   const inProgressCount = uniqueTickets.filter(t => t.status === 'in_progress').length;
@@ -89,7 +104,7 @@ export default async function LandlordMaintenanceHub() {
                     <div className="flex items-center gap-2 mt-1 text-sm text-slate-500">
                       <span>🏠 {ticket.propertyTitle}</span>
                       <span>•</span>
-                      <span>👤 {ticket.tenantName}</span>
+                      <span>👤 {ticket.tenantName || "Resident"}</span>
                       <span>•</span>
                       <span>📅 {new Date(ticket.createdAt).toLocaleDateString('en-GB')}</span>
                     </div>
