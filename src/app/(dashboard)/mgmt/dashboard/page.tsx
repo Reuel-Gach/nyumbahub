@@ -89,6 +89,10 @@ export default async function DashboardPage() {
           <p className="text-slate-500 mt-1">Overview of your portfolio performance.</p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
+          {/* 🔥 NEW: Maintenance Hub Quick-Link */}
+          <Link href="/mgmt/maintenance" className="bg-amber-50 hover:bg-amber-100 text-amber-800 px-4 py-2.5 rounded-lg font-bold text-sm border border-amber-200 transition-colors shadow-sm flex items-center gap-2">
+            🛠️ Maintenance Hub
+          </Link>
           <Link href="/mgmt/finances" className="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 px-4 py-2.5 rounded-lg font-bold text-sm border border-emerald-200 transition-colors shadow-sm flex items-center gap-2">
             💳 Finances
           </Link>
