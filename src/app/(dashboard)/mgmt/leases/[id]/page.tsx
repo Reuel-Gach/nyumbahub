@@ -5,9 +5,12 @@ import { db } from "@/db";
 import { leases } from "@/db/schema/leases";
 import { properties } from "@/db/schema/properties";
 import { users } from "@/db/schema/users";
-import { eq, and, sql } from "drizzle-orm"; // 🔥 Added sql and and
+import { eq, and, sql } from "drizzle-orm";
 import { currentUser } from "@clerk/nextjs/server";
 import EvictionModal from "@/components/EvictionModal";
+import { maintenanceTickets } from "@/db/schema/maintenance_tickets";
+import { desc } from "drizzle-orm";
+import TicketStatusDropdown from "@/components/TicketStatusDropdown";
 
 export default async function LandlordLeasePage({ params }: { params: { id: string } }) {
   const clerkUser = await currentUser();
@@ -44,6 +47,13 @@ export default async function LandlordLeasePage({ params }: { params: { id: stri
   if (loggedInUser[0]?.id !== lease.landlordId) {
     return <div className="p-10 text-center font-bold text-rose-600">Unauthorized access. This area is for the property owner only.</div>;
   }
+
+  // 🔥 3. Fetch Real Maintenance Tickets for this unit
+  const tickets = await db
+    .select()
+    .from(maintenanceTickets)
+    .where(eq(maintenanceTickets.propertyId, lease.propertyId))
+    .orderBy(desc(maintenanceTickets.createdAt));
 
   // ==========================================
   // 🔥 PRODUCTION ANALYTICS ENGINE
@@ -156,16 +166,44 @@ export default async function LandlordLeasePage({ params }: { params: { id: stri
             </div>
           </div>
 
-          {/* Maintenance Tickets (Mocked for now) */}
+          {/* 🔥 REAL Maintenance Tickets */}
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
             <div className="bg-slate-50 border-b border-slate-200 px-6 py-4 flex justify-between items-center">
               <h3 className="font-bold text-slate-800 flex items-center gap-2">
-                <span className="text-lg">🔧</span> Open Maintenance Tickets
+                <span className="text-lg">🔧</span> Maintenance Tickets
               </h3>
             </div>
-            <div className="p-10 text-center text-slate-500">
-              No active maintenance requests for this unit.
-            </div>
+            
+            {tickets.length > 0 ? (
+              <div className="divide-y divide-slate-100 p-6">
+                {tickets.map(ticket => (
+                  <div key={ticket.id} className="py-4 first:pt-0 last:pb-0">
+                    <div className="flex flex-col sm:flex-row justify-between sm:items-start gap-2 mb-2">
+                      <div>
+                        <h4 className="font-bold text-slate-800">{ticket.title}</h4>
+                        <p className="text-xs font-medium text-slate-500 mt-0.5">
+                          Submitted on {new Date(ticket.createdAt).toLocaleDateString('en-GB')}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {ticket.priority === 'emergency' && (
+                          <span className="text-[10px] font-bold text-rose-600 uppercase tracking-wider bg-rose-100 px-2 py-0.5 rounded-full">
+                            Emergency
+                          </span>
+                        )}
+                        {/* The interactive dropdown! */}
+                        <TicketStatusDropdown ticketId={ticket.id} currentStatus={ticket.status} />
+                      </div>
+                    </div>
+                    <p className="text-sm text-slate-600 mt-2 bg-slate-50 p-3 rounded-lg border border-slate-100">{ticket.description}</p>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="p-10 text-center text-slate-500">
+                No active maintenance requests for this unit.
+              </div>
+            )}
           </div>
         </div>
 
